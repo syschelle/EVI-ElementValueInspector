@@ -1,4 +1,4 @@
-# ElementValueInspector (EVI) v0.2.7
+# ElementValueInspector (EVI)
 
 Native Windows DICOM study and tag inspection application written in C++.
 
