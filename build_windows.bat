@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "APP_VERSION=0.2.5"
+set "APP_VERSION=0.2.7"
 set "ROOT=%CD%"
 set "LOCAL=%ROOT%\.build"
 set "CMAKE_HOME=%LOCAL%\cmake"
@@ -130,12 +130,13 @@ if not exist "%BUILT_EXE%" (
     exit /b 1
 )
 
-copy /Y "%BUILT_EXE%" "%DIST_DIR%\evi.exe" >nul
+rem CMake POST_BUILD already copies the EXE to dist and creates the SHA-256 file.
 
 echo [4/4] Fertig.
 echo.
 echo Portable EXE:
 echo   %DIST_DIR%\evi.exe
+echo   %DIST_DIR%\evi.exe.sha256
 echo.
 echo Auf dem Ziel-PC sind weder Java noch DCMTK/wxWidgets-DLLs erforderlich.
 echo Die Projekt-Abhaengigkeiten liegen nur unter .build und koennen dort komplett geloescht werden.

@@ -1,4 +1,4 @@
-# ElementValueInspector (EVI) v0.2.5
+# ElementValueInspector (EVI) v0.2.7
 
 Native Windows DICOM study and tag inspection application written in C++.
 
@@ -142,3 +142,35 @@ Weitere Task:
 Die Anwendung verarbeitet DICOM-Dateien ausschliesslich lokal. Es findet kein Upload und keine Netzwerkuebertragung der DICOM-Daten statt.
 
 Ein CSV-Export kann Patientendaten enthalten und muss entsprechend geschuetzt behandelt werden.
+
+## Release-Artefakte ab v0.2.6
+
+Jeder erfolgreiche Release-Build erzeugt automatisch im Projektordner:
+
+```text
+dist\evi.exe
+dist\evi.exe.sha256
+```
+
+Die Datei `evi.exe.sha256` enthaelt die SHA-256-Pruefsumme der exakt gebauten EXE und kann zusammen mit der EXE als GitHub-Release-Asset veroeffentlicht werden.
+
+Direkter CMake-Build:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+```
+
+Danach kann der GitHub Release nach dem Commit/Push mit folgendem Skript erstellt werden:
+
+```powershell
+.\publish_release.ps1
+```
+
+Das Skript erstellt den Release `v0.2.7` mit:
+
+- `evi.exe`
+- `evi.exe.sha256`
+- Release-Text aus `RELEASE.md`
+
+Existiert der Release bereits, werden die beiden Assets mit `--clobber` aktualisiert. Existiert er noch nicht, wird er automatisch neu angelegt. v0.2.7 behebt dabei den Abbruch durch die erwartete GitHub-CLI-Meldung `release not found`.

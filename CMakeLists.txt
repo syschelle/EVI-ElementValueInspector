@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(ElementValueInspector VERSION 0.2.5 LANGUAGES C CXX)
+project(ElementValueInspector VERSION 0.2.7 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -104,4 +104,20 @@ set_target_properties(evi PROPERTIES
     OUTPUT_NAME "evi"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release"
+)
+
+# --------------------------- Release artifacts ---------------------------
+# Keep the repository clean while still producing ready-to-upload artifacts
+# for GitHub Releases after every successful Release build.
+add_custom_command(TARGET evi POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_SOURCE_DIR}/dist"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:evi>"
+            "${CMAKE_SOURCE_DIR}/dist/evi.exe"
+    COMMAND "${CMAKE_COMMAND}"
+            "-DINPUT_FILE=${CMAKE_SOURCE_DIR}/dist/evi.exe"
+            "-DOUTPUT_FILE=${CMAKE_SOURCE_DIR}/dist/evi.exe.sha256"
+            -P "${CMAKE_SOURCE_DIR}/cmake/WriteSha256.cmake"
+    COMMENT "Creating portable evi.exe and SHA-256 release checksum"
+    VERBATIM
 )

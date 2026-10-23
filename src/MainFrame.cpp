@@ -73,7 +73,7 @@ std::string CsvEscape(const std::string& value) {
 } // namespace
 
 MainFrame::MainFrame()
-    : wxFrame(nullptr, wxID_ANY, "ElementValueInspector (EVI) v0.2.5", wxDefaultPosition, wxSize(1500, 920))
+    : wxFrame(nullptr, wxID_ANY, "ElementValueInspector (EVI) v0.2.7", wxDefaultPosition, wxSize(1500, 920))
 {
     BuildUi();
     BindEvents();

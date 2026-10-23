@@ -1,22 +1,31 @@
-# ElementValueInspector (EVI) v0.2.5
+# ElementValueInspector (EVI) v0.2.7
 
-## Fixed
+## Changes
 
-- Fixed MSVC `C2061` errors for `wxListEvent` in `MainFrame.h` and `TagDialog.h`.
-- Fixed the resulting wxWidgets `Bind()` signature errors for list-selection and list-activation handlers.
-- Fixed `wxString::Trim()` being called on a const string in the tag search dialog.
-- Added the missing `<wx/msgdlg.h>` include for `wxMessageBox`.
-- Fixed the ambiguous `const char*` / `wxString` conditional expression in study labels.
-- Fixed DCMTK `DcmTag::getTagName()` constness by routing tag-name lookup through the existing `DicomUtils::TagName()` helper.
-- Suppressed MSVC CRT deprecation warning C4996 for wxWidgets headers while compiling the EVI target.
-- Corrected Windows EXE numeric version metadata to 0.2.5.0.
-- Renamed the internal wxApp class from the legacy `EvaApp` name to `EviApp`.
+- Fixed first-time GitHub release publishing in `publish_release.ps1`.
+- A missing release is now treated as the expected state and no longer aborts the script with `NativeCommandError`.
+- Release existence is checked via the GitHub CLI exit code without exposing the expected `release not found` stderr message to PowerShell.
+- Existing releases are still updated with `--clobber`.
+- New releases still upload both `dist/evi.exe` and `dist/evi.exe.sha256`.
+- Corrected the Windows executable numeric file/product version to `0.2.7.0`.
+- DICOM inspection functionality is unchanged.
 
-## Build
+## Release assets
 
-The wxWidgets release-archive fix from v0.2.4 is retained. If the v0.2.4 CMake configure step already completed successfully, you can usually rebuild without deleting downloaded dependencies. For the cleanest upgrade, reconfigure the existing build directory before building:
+```text
+dist\evi.exe
+dist\evi.exe.sha256
+```
+
+## Publish
+
+After building, committing and pushing the source code:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+powershell.exe -ExecutionPolicy Bypass -File .\publish_release.ps1
 ```
+
+The script now handles both cases automatically:
+
+- `v0.2.7` does not exist → create the release and upload both assets.
+- `v0.2.7` already exists → replace/update both assets.
