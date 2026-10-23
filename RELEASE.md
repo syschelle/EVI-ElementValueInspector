@@ -1,62 +1,46 @@
-# EVI – ElementValueInspector v0.2.8
+# EVI – ElementValueInspector v0.2.11
 
-## Native Windows DICOM Element Inspector
+## Windows build fix
 
-EVI (ElementValueInspector) is a portable native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements across studies, series, instances, and nested sequences.
+This maintenance release fixes a compile-time name collision introduced by the modern Light/Dark theme implementation.
 
-## New in v0.2.8
+### Fixed
 
-- Modernized and more compact main window.
-- Compact two-row study/patient information panel with more room for result tables.
-- Selectable **Deutsch / English** user interface.
-- Language switching without restarting the application.
-- Localized controls, table headers, scan status, dialogs, and errors.
-- DICOM tag selection dialog follows the selected language.
-- Long study values are displayed compactly with the complete value available as a tooltip.
+- Renamed the internal theme palette helper so it no longer collides with `wxWindowBase::GetPalette()`.
+- Restores successful MSVC compilation of the Light/Dark theme code.
+- Keeps the modernized interface, compact study information strip, German/English runtime switching, Unicode/UTF-8 handling, and native Windows dark title bar introduced in the previous UI refresh.
 
-## Core features
+## Core capabilities
 
-- Native C++20 Windows application
-- Single portable `evi.exe`
-- No Java or Python runtime required
-- DCMTK 3.7.0 based DICOM parsing
-- wxWidgets 3.2.12 based Windows user interface
 - Recursive scanning of complete DICOM study folders
-- Automatic study, series, and instance detection
-- Manual DICOM tag entry
-- Searchable selection from the built-in DICOM dictionary
-- Recursive search inside nested DICOM sequences
-- File Meta Information search
-- Series overview and per-instance match details
+- Search by manual DICOM tag or dictionary selection
+- Search inside nested sequences
+- Search inside File Meta Information
+- Complete series overview, including series without matches
+- Per-instance match details with VR, value, sequence path, file, and SOP Instance UID
 - CSV export
 - Progress display and scan cancellation
-- Built-in DICOM dictionary; no external `dicom.dic` required
-- Static Windows runtime and libraries for a portable executable
+- Embedded DCMTK DICOM dictionary
+- Local-only DICOM processing
+- German and English user interface
+- Light and Dark appearance modes
 
 ## Release assets
 
-- `evi.exe` – portable Windows x64 application
-- `evi.exe.sha256` – SHA-256 checksum
+- `evi.exe` — portable Windows x64 application
+- `evi.exe.sha256` — SHA-256 checksum
 
-## Verify the download
+## Verify the executable
 
 ```powershell
 Get-FileHash .\evi.exe -Algorithm SHA256
 Get-Content .\evi.exe.sha256
 ```
 
-The hash values must match.
+The hashes must match.
 
-## Build
+## Build fix
 
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-```
+- Fixed duplicate Windows manifest embedding that caused `CVTRES fatal error CVT1100` and `LNK1123` during MSVC builds.
+- The resource script now contains version metadata only; the application manifest is merged by the linker via `/MANIFESTINPUT`.
 
-Result:
-
-```text
-dist\evi.exe
-dist\evi.exe.sha256
-```

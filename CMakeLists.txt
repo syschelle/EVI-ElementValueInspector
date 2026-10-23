@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(ElementValueInspector VERSION 0.2.8 LANGUAGES C CXX)
+project(ElementValueInspector VERSION 0.2.11 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -73,6 +73,7 @@ add_executable(evi WIN32
     src/DicomUtils.h
     src/Models.h
     src/UiLanguage.h
+    src/UiTheme.h
     src/evi.rc
 )
 
@@ -86,6 +87,10 @@ target_link_libraries(evi PRIVATE
     ofstd
 )
 
+if(WIN32)
+    target_link_libraries(evi PRIVATE dwmapi uxtheme)
+endif()
+
 target_include_directories(evi PRIVATE src)
 
 target_compile_definitions(evi PRIVATE
@@ -98,7 +103,11 @@ target_compile_definitions(evi PRIVATE
 
 if(MSVC)
     target_compile_options(evi PRIVATE /W4 /permissive- /utf-8)
-    target_link_options(evi PRIVATE /SUBSYSTEM:WINDOWS)
+    target_link_options(evi PRIVATE
+        /SUBSYSTEM:WINDOWS
+        /MANIFEST:EMBED
+        "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/src/evi.manifest"
+    )
 endif()
 
 set_target_properties(evi PROPERTIES

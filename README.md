@@ -1,184 +1,208 @@
-# ElementValueInspector (EVI) v0.2.8
+# ElementValueInspector (EVI)
 
-## User interface languages
+ElementValueInspector (EVI) is a native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements across studies, series, instances, file meta information, and nested sequences.
 
-EVI provides a selectable **German / English** user interface. The language can be changed from the main window without restarting the application. The tag picker, table headings, scan status, buttons, dialogs, and errors follow the selected language.
+EVI is designed as a lightweight local inspection tool. It does not require a PACS connection and does not upload DICOM data to any external service.
+
+## What EVI does
+
+EVI scans a selected study folder recursively, identifies DICOM files, builds a study and series overview, and searches every readable DICOM instance for a selected data element.
+
+A search can be started with a manually entered tag or with a tag selected from the built-in DICOM dictionary.
+
+Supported manual tag formats include:
+
+```text
+(0018,1030)
+00181030
+ProtocolName
+```
+
+Numerical tag entry also allows private or vendor-specific tags to be inspected even when they are not part of the standard dictionary.
+
+## DICOM tag browser
+
+The **Select tag** dialog provides a searchable view of the DICOM dictionary embedded in DCMTK.
+
+Tags can be filtered by:
+
+- tag number
+- tag name or keyword
+- VR
+- VM
+- standard/version information provided by the dictionary
+
+The selected tag is transferred directly into the main search field.
+
+## Study and series overview
+
+After a study has been scanned, EVI displays compact study information including:
+
+- patient name
+- patient ID
+- study date
+- accession number
+- study description
+- Study Instance UID
+
+Long values remain available through tooltips without consuming unnecessary screen space.
+
+The series overview includes:
+
+- Series Number
+- Modality
+- Series Description
+- Protocol Name
+- Body Part Examined
+- number of instances
+- number of matches
+- Series Instance UID
+
+All detected series are shown, including series that do not contain the requested tag.
+
+## Match details
+
+Each matching DICOM element is shown together with its instance and series context:
+
+- Series Number
+- Instance Number
+- Modality
+- tag number
+- tag name
+- VR
+- element value
+- nested sequence path
+- relative source file
+- SOP Instance UID
+
+Selecting a series filters the match list to that series. **Show all** restores the complete result set.
+
+## Nested sequences and file meta information
+
+The dataset traversal is recursive. EVI can therefore locate the requested tag inside nested DICOM sequences instead of searching only the dataset root.
+
+File Meta Information is searched as well, allowing `(0002,xxxx)` elements to be inspected.
 
 ## User interface
 
-The v0.2.8 interface uses a compact study information card so the series and instance/match tables receive more vertical space. Long values such as Study Instance UID are visually shortened and remain available as tooltips.
+EVI provides a compact native Windows interface with:
 
-Native Windows DICOM study and tag inspection application written in C++.
+- German and English user interface languages
+- runtime language switching without restarting the application
+- Light and Dark appearance modes
+- native Windows title-bar dark mode support
+- high-DPI awareness
+- modern Windows common controls
+- compact study information strip
+- alternating table rows for easier reading
+- progress feedback during scanning
+- scan cancellation
 
-## Ziel
+The interface uses Unicode throughout and explicitly enables UTF-8 at the Windows process level to preserve German umlauts and other non-ASCII characters.
 
-Eine komplette DICOM-Studie lokal nach einem bestimmten DICOM-Tag durchsuchen und die Treffer zusammen mit Studien-, Serien- und Instanzdaten anzeigen.
+## CSV export
 
-Die fertige Anwendung ist eine einzelne portable Windows-Datei:
+Search results can be exported as a UTF-8 CSV file. The export contains study, series, instance, tag, value, sequence-path, and source-file information.
 
-```text
-dist\evi.exe
-```
+Because exported files can contain patient information, exported CSV files should be handled according to the same privacy and security requirements as the source DICOM data.
 
-Auf dem Zielrechner werden weder Java noch Python noch separate DCMTK-/wxWidgets-DLLs benoetigt.
+## Performance and large data elements
 
-## Technik
+EVI is intended for metadata inspection, not image rendering.
 
-- C++20
-- wxWidgets 3.2.12, statisch gelinkt
-- DCMTK 3.7.0, statisch gelinkt
-- eingebautes DCMTK-DICOM-Dictionary
-- Microsoft Visual C++ Runtime statisch (`/MT`)
-- CMake/Visual Studio 2022 Build Tools
+DICOM files are read with a limited maximum element read length, and large binary values are not loaded into the result view. Pixel Data is explicitly represented as omitted rather than being displayed as metadata text. This keeps study scans responsive and avoids unnecessary memory use on large CT, MR, and similar studies.
 
-## Funktionen
+## Local processing and privacy
 
-- kompletter Studienordner inklusive Unterordner
-- Anzeige der Studieninformationen
-- Anzeige aller gefundenen Serien, auch ohne Treffer
-- Serieninformationen:
-  - Series Number
-  - Modality
-  - Series Description
-  - Protocol Name
-  - Body Part Examined
-  - Anzahl Instanzen
-  - Trefferzahl
-  - Series Instance UID
-- DICOM-Tag manuell eingeben:
-  - `(0018,1030)`
-  - `00181030`
-  - `ProtocolName`
-- private/unbekannte Tags koennen als numerischer Tag eingegeben werden
-- Dialog **Tag auswaehlen ...** mit dem vollstaendigen eingebetteten DCMTK-Dictionary
-- Tag-Liste nach Tagnummer, Name/Keyword, VR und VM durchsuchen
-- rekursive Suche innerhalb verschachtelter DICOM-Sequences
-- Suche auch in File Meta Information
-- Trefferanzeige mit:
-  - Serie
-  - Instance Number
-  - Modality
-  - Tag
-  - Tagname
-  - VR
-  - Wert
-  - Sequence-Pfad
-  - Datei
-  - SOP Instance UID
-- Treffer einer einzelnen Serie filtern
-- CSV-Export
-- Fortschrittsanzeige
-- laufenden Scan abbrechen
-- PixelData und sehr grosse Binary-Werte werden nicht fuer die Anzeige geladen
-- Unicode-Dateipfade unter Windows
+All DICOM processing is performed locally on the Windows computer running EVI.
 
+EVI does not:
 
+- upload DICOM files
+- contact a PACS automatically
+- send patient information to a cloud service
+- require an online account
 
-### v0.2.5 compiler fixes
+Network access is only relevant during source builds when CMake downloads the declared third-party source dependencies.
 
-- fixed `wxListEvent` declarations for the series and tag-selection list controls
-- fixed wxWidgets event-handler binding compilation
-- fixed const-safe filtering in the DICOM tag dialog
-- fixed the study-label `wxString` conditional expression
-- fixed DCMTK tag-name lookup for const `DcmTag` references
-- added the missing wxWidgets message-dialog include
-- suppresses MSVC CRT deprecation warnings originating from wxWidgets headers while compiling EVI
+## Technology
 
-### Updating from v0.2.3
+EVI is implemented as a native C++20 Windows application using:
 
-If you already ran CMake with v0.2.3, remove the old build cache once before configuring:
+- DCMTK 3.7.0 for DICOM parsing and the embedded DICOM dictionary
+- wxWidgets 3.2.12 for the native Windows user interface
+- CMake for project configuration and builds
+- Microsoft Visual C++ for Windows x64 builds
+
+DCMTK, wxWidgets, and the Microsoft C/C++ runtime are linked so that the release output is a portable executable without separate application DLLs.
+
+## Build requirements
+
+The build machine requires:
+
+- Windows 10 or Windows 11 x64
+- Visual Studio 2022 Build Tools
+- **Desktop development with C++** workload
+- Windows SDK
+- CMake
+
+CMake can be installed with Windows Package Manager if required:
 
 ```powershell
-Remove-Item -Recurse -Force build
+winget install Kitware.CMake
+```
+
+## Configure and build
+
+From the repository root:
+
+```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 ```
 
-v0.2.4 uses the official wxWidgets 3.2.12 Windows source archive, which includes the required third-party/submodule sources.
+The compiled application is created under:
 
-## Build unter Windows
-
-### Einzige Systemvoraussetzung
-
-Microsoft Visual Studio 2022 Build Tools mit dem Workload **Desktop development with C++** und Windows SDK.
-
-Falls noch nicht vorhanden:
-
-```bat
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```text
+build\bin\Release\evi.exe
 ```
 
-Danach reicht:
-
-```bat
-build_windows.bat
-```
-
-Das Buildskript:
-
-1. erkennt die installierten Visual C++ Build Tools,
-2. laedt CMake 4.2.0 portabel nur nach `.build`,
-3. laedt wxWidgets und DCMTK per CMake FetchContent nur nach `.build`,
-4. baut alle Bibliotheken statisch,
-5. erzeugt `dist\evi.exe`.
-
-Es wird weder DCMTK noch wxWidgets noch CMake systemweit installiert.
-
-Der komplette lokale Buildcache kann jederzeit durch Loeschen von `.build` entfernt werden.
-
-### Visual-Studio-Erkennung in v0.2.3
-
-Die Erkennung von `vswhere.exe` wurde fuer Windows-Pfade wie `C:\Program Files (x86)\...` korrigiert. Das Buildskript verwendet fuer die Rueckgabe des Visual-Studio-Installationspfads keine `for /f`-Command-Substitution mehr.
-
-## VS Code
-
-Den Projektordner in VS Code oeffnen. Empfohlen werden:
-
-- Microsoft C/C++
-- CMake Tools
-
-`Ctrl+Shift+B` startet den Task:
-
-**ElementValueInspector (EVI): Build Native EXE**
-
-Weitere Task:
-
-**ElementValueInspector (EVI): Run**
-
-## Datenschutz
-
-Die Anwendung verarbeitet DICOM-Dateien ausschliesslich lokal. Es findet kein Upload und keine Netzwerkuebertragung der DICOM-Daten statt.
-
-Ein CSV-Export kann Patientendaten enthalten und muss entsprechend geschuetzt behandelt werden.
-
-## Release-Artefakte ab v0.2.6
-
-Jeder erfolgreiche Release-Build erzeugt automatisch im Projektordner:
+The build also creates ready-to-publish release artifacts:
 
 ```text
 dist\evi.exe
 dist\evi.exe.sha256
 ```
 
-Die Datei `evi.exe.sha256` enthaelt die SHA-256-Pruefsumme der exakt gebauten EXE und kann zusammen mit der EXE als GitHub-Release-Asset veroeffentlicht werden.
+The SHA-256 file contains the checksum of the exact executable produced by the build.
 
-Direkter CMake-Build:
+## VS Code
 
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+The repository contains VS Code task definitions for building and running EVI.
+
+Recommended extensions:
+
+- Microsoft C/C++
+- CMake Tools
+
+The default build task can be started with:
+
+```text
+Ctrl+Shift+B
 ```
 
-Danach kann der GitHub Release nach dem Commit/Push mit folgendem Skript erstellt werden:
+## Repository layout
 
-```powershell
-.\publish_release.ps1
+```text
+src/                 C++ application sources
+cmake/               CMake helper scripts
+.vscode/             VS Code tasks and extension recommendations
+CMakeLists.txt        CMake project definition
+build_windows.bat     automated Windows build helper
+run_windows.bat       starts the built portable executable
+RELEASE.md            current GitHub release text
+RELEASE_NOTES.md      current release notes
+THIRD_PARTY.md        third-party component information
 ```
 
-Das Skript erstellt den Release `v0.2.8` mit:
-
-- `evi.exe`
-- `evi.exe.sha256`
-- Release-Text aus `RELEASE.md`
-
-Existiert der Release bereits, werden die beiden Assets mit `--clobber` aktualisiert. Existiert er noch nicht, wird er automatisch neu angelegt. v0.2.8 behebt dabei den Abbruch durch die erwartete GitHub-CLI-Meldung `release not found`.
+Build output directories such as `build/`, `.build/`, and executable release artifacts under `dist/` are excluded from normal source control.

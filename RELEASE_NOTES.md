@@ -1,20 +1,18 @@
-# ElementValueInspector (EVI) v0.2.8
+# EVI v0.2.11 Release Notes
 
-## Changes
+## Fixed
 
-- Added selectable **German and English user interface languages**.
-- Added a language selector to the main window; the interface can be switched without restarting EVI.
-- Localized buttons, section headings, table columns, scan status messages, dialogs, errors, and CSV export dialogs.
-- The DICOM tag selection dialog now follows the currently selected UI language.
-- Redesigned the main window for a cleaner, more modern Windows desktop appearance.
-- Reduced the large study/patient information area to a compact two-row information card.
-- Long study values such as the Study Instance UID are ellipsized in the UI and remain available through a tooltip.
-- Increased the usable vertical area for the series overview and match/instance table.
-- Kept all existing DICOM scanning, nested-sequence search, CSV export, portable EXE, SHA-256, and GitHub release functionality.
+- Fixed the Windows/MSVC build failure caused by duplicate embedded manifest resources (`CVTRES fatal error CVT1100` / `LNK1123`).
+- Removed direct manifest embedding from `evi.rc`.
+- The application manifest is now merged and embedded once by the MSVC linker via `/MANIFESTINPUT`.
 
-## Release assets
+## Unchanged
 
-```text
-dist\evi.exe
-dist\evi.exe.sha256
-```
+- Modern Light/Dark interface
+- German/English runtime language switching
+- Compact study/patient information strip
+- Unicode/UTF-8 Windows UI handling
+- Recursive DICOM tag search and nested sequence support
+- Built-in DICOM dictionary selection and manual tag entry
+- CSV export
+- Portable native Windows build

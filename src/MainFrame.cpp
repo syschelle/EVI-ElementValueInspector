@@ -7,15 +7,23 @@
 #include <wx/choice.h>
 #include <wx/dirdlg.h>
 #include <wx/filedlg.h>
+#include <wx/font.h>
 #include <wx/gauge.h>
 #include <wx/listctrl.h>
 #include <wx/msgdlg.h>
 #include <wx/panel.h>
+#include <wx/settings.h>
 #include <wx/sizer.h>
 #include <wx/splitter.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/thread.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
+#endif
 
 #include <algorithm>
 #include <fstream>
@@ -35,8 +43,48 @@ enum {
     ID_CANCEL_SCAN,
     ID_SHOW_ALL,
     ID_EXPORT,
-    ID_LANGUAGE
+    ID_LANGUAGE,
+    ID_THEME
 };
+
+struct Palette {
+    wxColour window;
+    wxColour card;
+    wxColour table;
+    wxColour alternate;
+    wxColour input;
+    wxColour text;
+    wxColour muted;
+    wxColour accent;
+    wxColour separator;
+};
+
+Palette BuildThemePalette(UiTheme theme) {
+    if (theme == UiTheme::Dark) {
+        return {
+            wxColour(24, 27, 32),
+            wxColour(31, 35, 41),
+            wxColour(28, 32, 38),
+            wxColour(34, 39, 46),
+            wxColour(42, 47, 55),
+            wxColour(235, 238, 242),
+            wxColour(164, 173, 184),
+            wxColour(80, 174, 255),
+            wxColour(58, 64, 73)
+        };
+    }
+    return {
+        wxColour(244, 246, 249),
+        wxColour(255, 255, 255),
+        wxColour(255, 255, 255),
+        wxColour(248, 250, 252),
+        wxColour(255, 255, 255),
+        wxColour(30, 35, 42),
+        wxColour(100, 109, 120),
+        wxColour(0, 120, 212),
+        wxColour(224, 229, 235)
+    };
+}
 
 wxString W(const std::string& text) {
     return wxString::FromUTF8(text.c_str());
@@ -47,29 +95,34 @@ std::string U8(const wxString& text) {
     return buffer.data() ? std::string(buffer.data()) : std::string{};
 }
 
-wxStaticText* AddInfoPair(wxWindow* parent,
-                          wxFlexGridSizer* grid,
-                          wxStaticText*& keyOut,
-                          int valueWidth = 250) {
-    keyOut = new wxStaticText(parent, wxID_ANY, "-");
+wxStaticText* AddCompactInfoPair(wxWindow* parent,
+                                 wxBoxSizer* row,
+                                 wxStaticText*& keyOut,
+                                 int proportion,
+                                 int minWidth) {
+    auto* pair = new wxBoxSizer(wxVERTICAL);
+
+    keyOut = new wxStaticText(parent, wxID_ANY, wxString(L"-"));
     wxFont keyFont = keyOut->GetFont();
+    keyFont.SetPointSize(std::max(8, keyFont.GetPointSize() - 1));
     keyFont.MakeBold();
     keyOut->SetFont(keyFont);
-    keyOut->SetForegroundColour(wxColour(80, 84, 89));
 
-    auto* value = new wxStaticText(parent, wxID_ANY, "-", wxDefaultPosition,
-                                   wxSize(valueWidth, -1), wxST_ELLIPSIZE_END | wxST_NO_AUTORESIZE);
-    value->SetMinSize(wxSize(valueWidth, -1));
+    auto* value = new wxStaticText(parent, wxID_ANY, wxString(L"-"), wxDefaultPosition,
+                                   wxSize(minWidth, -1), wxST_ELLIPSIZE_END | wxST_NO_AUTORESIZE);
+    wxFont valueFont = value->GetFont();
+    valueFont.MakeBold();
+    value->SetFont(valueFont);
+    value->SetMinSize(wxSize(minWidth, -1));
 
-    auto* pair = new wxBoxSizer(wxVERTICAL);
-    pair->Add(keyOut, 0, wxBOTTOM, 2);
+    pair->Add(keyOut, 0, wxBOTTOM, 1);
     pair->Add(value, 0, wxEXPAND);
-    grid->Add(pair, 1, wxEXPAND | wxRIGHT | wxBOTTOM, 14);
+    row->Add(pair, proportion, wxEXPAND | wxRIGHT, 16);
     return value;
 }
 
 std::string CsvEscape(const std::string& value) {
-    bool quote = value.find_first_of(";\"\r\n") != std::string::npos;
+    const bool quote = value.find_first_of(";\"\r\n") != std::string::npos;
     if (!quote) return value;
     std::string out = "\"";
     for (char c : value) {
@@ -80,16 +133,26 @@ std::string CsvEscape(const std::string& value) {
     return out;
 }
 
+#ifdef _WIN32
+void ApplyExplorerTheme(wxWindow* window, bool dark) {
+    if (!window || !window->GetHandle()) return;
+    const wchar_t* themeName = dark ? L"DarkMode_Explorer" : L"Explorer";
+    SetWindowTheme(reinterpret_cast<HWND>(window->GetHandle()), themeName, nullptr);
+}
+#endif
+
 } // namespace
 
 MainFrame::MainFrame()
-    : wxFrame(nullptr, wxID_ANY, "ElementValueInspector (EVI) v0.2.8",
-              wxDefaultPosition, wxSize(1500, 900))
+    : wxFrame(nullptr, wxID_ANY, wxString(L"ElementValueInspector (EVI)"),
+              wxDefaultPosition, wxSize(1500, 920))
 {
+    SetMinSize(wxSize(1180, 720));
+    SetFont(wxFont(wxFontInfo(10).FaceName(wxString(L"Segoe UI"))));
     BuildUi();
     BindEvents();
     ApplyLanguage();
-    ApplyModernStyle();
+    ApplyTheme();
     Centre();
 }
 
@@ -97,185 +160,186 @@ MainFrame::~MainFrame() {
     StopWorker();
 }
 
-wxString MainFrame::L(const char* de, const char* en) const {
-    return wxString::FromUTF8(language_ == UiLanguage::German ? de : en);
+wxString MainFrame::L(const wchar_t* de, const wchar_t* en) const {
+    return wxString(language_ == UiLanguage::German ? de : en);
 }
 
 void MainFrame::BuildUi() {
     rootPanel_ = new wxPanel(this);
     auto* root = new wxBoxSizer(wxVERTICAL);
 
-    // Header with app identity and language selector.
-    auto* header = new wxPanel(rootPanel_);
+    // Compact application header.
+    headerPanel_ = new wxPanel(rootPanel_);
     auto* headerSizer = new wxBoxSizer(wxHORIZONTAL);
     auto* identity = new wxBoxSizer(wxVERTICAL);
+    auto* titleRow = new wxBoxSizer(wxHORIZONTAL);
 
-    title_ = new wxStaticText(header, wxID_ANY, "ElementValueInspector (EVI)");
+    title_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"ElementValueInspector"));
     wxFont titleFont = title_->GetFont();
-    titleFont.SetPointSize(titleFont.GetPointSize() + 5);
+    titleFont.SetPointSize(titleFont.GetPointSize() + 6);
     titleFont.MakeBold();
     title_->SetFont(titleFont);
-    identity->Add(title_, 0, wxBOTTOM, 3);
+    titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    subtitle_ = new wxStaticText(header, wxID_ANY, "");
-    subtitle_->SetForegroundColour(wxColour(90, 95, 100));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.11"));
+    wxFont versionFont = version_->GetFont();
+    versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
+    versionFont.MakeBold();
+    version_->SetFont(versionFont);
+    titleRow->Add(version_, 0, wxALIGN_CENTER_VERTICAL);
+    identity->Add(titleRow, 0, wxBOTTOM, 2);
+
+    subtitle_ = new wxStaticText(headerPanel_, wxID_ANY, wxEmptyString);
     identity->Add(subtitle_, 0);
-
     headerSizer->Add(identity, 1, wxALIGN_CENTER_VERTICAL);
-    languageLabel_ = new wxStaticText(header, wxID_ANY, "");
-    languageChoice_ = new wxChoice(header, ID_LANGUAGE);
-    languageChoice_->Append("Deutsch");
-    languageChoice_->Append("English");
-    languageChoice_->SetSelection(0);
-    headerSizer->Add(languageLabel_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-    headerSizer->Add(languageChoice_, 0, wxALIGN_CENTER_VERTICAL);
-    header->SetSizer(headerSizer);
-    root->Add(header, 0, wxEXPAND | wxALL, 14);
 
-    // Source card.
-    auto* sourceCard = new wxPanel(rootPanel_);
-    auto* sourceSizer = new wxBoxSizer(wxVERTICAL);
-    sourceTitle_ = new wxStaticText(sourceCard, wxID_ANY, "");
+    themeLabel_ = new wxStaticText(headerPanel_, wxID_ANY, wxEmptyString);
+    themeChoice_ = new wxChoice(headerPanel_, ID_THEME);
+    themeChoice_->Append(wxString(L"Hell"));
+    themeChoice_->Append(wxString(L"Dunkel"));
+    themeChoice_->SetSelection(0);
+
+    languageLabel_ = new wxStaticText(headerPanel_, wxID_ANY, wxEmptyString);
+    languageChoice_ = new wxChoice(headerPanel_, ID_LANGUAGE);
+    languageChoice_->Append(wxString(L"Deutsch"));
+    languageChoice_->Append(wxString(L"English"));
+    languageChoice_->SetSelection(0);
+
+    headerSizer->Add(themeLabel_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    headerSizer->Add(themeChoice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 18);
+    headerSizer->Add(languageLabel_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    headerSizer->Add(languageChoice_, 0, wxALIGN_CENTER_VERTICAL);
+    headerPanel_->SetSizer(headerSizer);
+    root->Add(headerPanel_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 16);
+
+    // One flat search card with two compact rows.
+    searchCard_ = new wxPanel(rootPanel_);
+    auto* searchSizer = new wxBoxSizer(wxVERTICAL);
+    auto* sourceRow = new wxBoxSizer(wxHORIZONTAL);
+    auto* tagRow = new wxBoxSizer(wxHORIZONTAL);
+
+    sourceTitle_ = new wxStaticText(searchCard_, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(105, -1));
     wxFont sectionFont = sourceTitle_->GetFont();
     sectionFont.MakeBold();
     sourceTitle_->SetFont(sectionFont);
-    sourceSizer->Add(sourceTitle_, 0, wxLEFT | wxRIGHT | wxTOP, 12);
-    auto* sourceRow = new wxBoxSizer(wxHORIZONTAL);
-    folder_ = new wxTextCtrl(sourceCard, wxID_ANY);
-    browse_ = new wxButton(sourceCard, ID_CHOOSE_FOLDER, "");
-    sourceRow->Add(folder_, 1, wxEXPAND | wxRIGHT, 8);
-    sourceRow->Add(browse_, 0);
-    sourceSizer->Add(sourceRow, 0, wxEXPAND | wxALL, 12);
-    sourceCard->SetSizer(sourceSizer);
-    root->Add(sourceCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 14);
+    folder_ = new wxTextCtrl(searchCard_, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+    browse_ = new wxButton(searchCard_, ID_CHOOSE_FOLDER, wxEmptyString);
+    browse_->SetMinSize(wxSize(150, 34));
+    sourceRow->Add(sourceTitle_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    sourceRow->Add(folder_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    sourceRow->Add(browse_, 0, wxALIGN_CENTER_VERTICAL);
 
-    // Tag/search card.
-    auto* tagCard = new wxPanel(rootPanel_);
-    auto* tagSizer = new wxBoxSizer(wxVERTICAL);
-    tagTitle_ = new wxStaticText(tagCard, wxID_ANY, "DICOM-Tag");
+    tagTitle_ = new wxStaticText(searchCard_, wxID_ANY, wxString(L"DICOM Tag"), wxDefaultPosition, wxSize(105, -1));
     tagTitle_->SetFont(sectionFont);
-    tagSizer->Add(tagTitle_, 0, wxLEFT | wxRIGHT | wxTOP, 12);
-
-    auto* tagRow = new wxBoxSizer(wxHORIZONTAL);
-    tag_ = new wxTextCtrl(tagCard, wxID_ANY, "(0018,1030)");
-    chooseTag_ = new wxButton(tagCard, ID_CHOOSE_TAG, "");
-    tagInfo_ = new wxStaticText(tagCard, wxID_ANY, "ProtocolName");
-    tagInfo_->SetForegroundColour(wxColour(82, 94, 110));
-    start_ = new wxButton(tagCard, ID_START_SCAN, "");
-    cancel_ = new wxButton(tagCard, ID_CANCEL_SCAN, "");
+    tag_ = new wxTextCtrl(searchCard_, wxID_ANY, wxString(L"(0018,1030)"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+    chooseTag_ = new wxButton(searchCard_, ID_CHOOSE_TAG, wxEmptyString);
+    chooseTag_->SetMinSize(wxSize(150, 34));
+    tagInfo_ = new wxStaticText(searchCard_, wxID_ANY, wxString(L"ProtocolName"), wxDefaultPosition, wxSize(190, -1), wxST_ELLIPSIZE_END);
+    start_ = new wxButton(searchCard_, ID_START_SCAN, wxEmptyString);
+    start_->SetMinSize(wxSize(150, 34));
+    start_->SetDefault();
+    cancel_ = new wxButton(searchCard_, ID_CANCEL_SCAN, wxEmptyString);
+    cancel_->SetMinSize(wxSize(105, 34));
     cancel_->Enable(false);
-    tagRow->Add(tag_, 1, wxEXPAND | wxRIGHT, 8);
-    tagRow->Add(chooseTag_, 0, wxRIGHT, 10);
-    tagRow->Add(tagInfo_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 14);
-    tagRow->Add(start_, 0, wxRIGHT, 8);
-    tagRow->Add(cancel_, 0);
-    tagSizer->Add(tagRow, 0, wxEXPAND | wxALL, 12);
-    tagCard->SetSizer(tagSizer);
-    root->Add(tagCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+
+    tagRow->Add(tagTitle_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    tagRow->Add(tag_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    tagRow->Add(chooseTag_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+    tagRow->Add(tagInfo_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+    tagRow->Add(start_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    tagRow->Add(cancel_, 0, wxALIGN_CENTER_VERTICAL);
+
+    searchSizer->Add(sourceRow, 0, wxEXPAND | wxALL, 12);
+    searchSizer->Add(tagRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    searchCard_->SetSizer(searchSizer);
+    root->Add(searchCard_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
 
     auto* progressRow = new wxBoxSizer(wxHORIZONTAL);
-    gauge_ = new wxGauge(rootPanel_, wxID_ANY, 100);
-    status_ = new wxStaticText(rootPanel_, wxID_ANY, "");
+    gauge_ = new wxGauge(rootPanel_, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 12));
+    status_ = new wxStaticText(rootPanel_, wxID_ANY, wxEmptyString);
     progressRow->Add(gauge_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
     progressRow->Add(status_, 2, wxALIGN_CENTER_VERTICAL);
     root->Add(progressRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-    // Compact study card: 3 items per row instead of a tall vertical block.
-    auto* studyCard = new wxPanel(rootPanel_);
-    auto* studySizer = new wxBoxSizer(wxVERTICAL);
-    studySectionTitle_ = new wxStaticText(studyCard, wxID_ANY, "");
-    studySectionTitle_->SetFont(sectionFont);
-    studySizer->Add(studySectionTitle_, 0, wxLEFT | wxRIGHT | wxTOP, 12);
+    // Very compact study strip: one row, no tall group box.
+    studyCard_ = new wxPanel(rootPanel_);
+    auto* studyRow = new wxBoxSizer(wxHORIZONTAL);
+    studySectionTitle_ = new wxStaticText(studyCard_, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(72, -1));
+    wxFont studyTitleFont = studySectionTitle_->GetFont();
+    studyTitleFont.MakeBold();
+    studySectionTitle_->SetFont(studyTitleFont);
+    studyRow->Add(studySectionTitle_, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
 
-    auto* studyGrid = new wxFlexGridSizer(3, 10, 16);
-    studyGrid->AddGrowableCol(0, 1);
-    studyGrid->AddGrowableCol(1, 1);
-    studyGrid->AddGrowableCol(2, 1);
-    patientName_ = AddInfoPair(studyCard, studyGrid, patientNameLabel_, 230);
-    patientId_ = AddInfoPair(studyCard, studyGrid, patientIdLabel_, 180);
-    studyDate_ = AddInfoPair(studyCard, studyGrid, studyDateLabel_, 180);
-    accession_ = AddInfoPair(studyCard, studyGrid, accessionLabel_, 230);
-    studyDescription_ = AddInfoPair(studyCard, studyGrid, studyDescriptionLabel_, 300);
-    studyUid_ = AddInfoPair(studyCard, studyGrid, studyUidLabel_, 390);
-    studySizer->Add(studyGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 12);
-    studyCard->SetSizer(studySizer);
-    root->Add(studyCard, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    patientName_ = AddCompactInfoPair(studyCard_, studyRow, patientNameLabel_, 2, 130);
+    patientId_ = AddCompactInfoPair(studyCard_, studyRow, patientIdLabel_, 1, 100);
+    studyDate_ = AddCompactInfoPair(studyCard_, studyRow, studyDateLabel_, 1, 90);
+    accession_ = AddCompactInfoPair(studyCard_, studyRow, accessionLabel_, 1, 120);
+    studyDescription_ = AddCompactInfoPair(studyCard_, studyRow, studyDescriptionLabel_, 3, 210);
+    studyUid_ = AddCompactInfoPair(studyCard_, studyRow, studyUidLabel_, 3, 260);
+    studyCard_->SetSizer(studyRow);
+    root->Add(studyCard_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-    auto* splitter = new wxSplitterWindow(rootPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                          wxSP_LIVE_UPDATE | wxSP_BORDER);
-    auto* topPanel = new wxPanel(splitter);
-    auto* bottomPanel = new wxPanel(splitter);
-    topPanel->SetBackgroundColour(wxColour(255, 255, 255));
-    bottomPanel->SetBackgroundColour(wxColour(255, 255, 255));
+    // Main content area: clean list views without old-fashioned grid lines.
+    splitter_ = new wxSplitterWindow(rootPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE);
+    seriesPanel_ = new wxPanel(splitter_);
+    hitsPanel_ = new wxPanel(splitter_);
 
     auto* seriesSizer = new wxBoxSizer(wxVERTICAL);
-    seriesTitle_ = new wxStaticText(topPanel, wxID_ANY, "");
+    seriesTitle_ = new wxStaticText(seriesPanel_, wxID_ANY, wxEmptyString);
     seriesTitle_->SetFont(sectionFont);
-    seriesSizer->Add(seriesTitle_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 8);
-    seriesList_ = new wxListCtrl(topPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                 wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_VRULES);
-    seriesList_->AppendColumn("", wxLIST_FORMAT_LEFT, 70);
-    seriesList_->AppendColumn("", wxLIST_FORMAT_LEFT, 85);
-    seriesList_->AppendColumn("", wxLIST_FORMAT_LEFT, 260);
-    seriesList_->AppendColumn("Protocol Name", wxLIST_FORMAT_LEFT, 210);
-    seriesList_->AppendColumn("Body Part", wxLIST_FORMAT_LEFT, 115);
-    seriesList_->AppendColumn("", wxLIST_FORMAT_RIGHT, 80);
-    seriesList_->AppendColumn("", wxLIST_FORMAT_RIGHT, 70);
-    seriesList_->AppendColumn("Series Instance UID", wxLIST_FORMAT_LEFT, 420);
-    seriesSizer->Add(seriesList_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
-    topPanel->SetSizer(seriesSizer);
+    seriesSizer->Add(seriesTitle_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 10);
+    seriesList_ = new wxListCtrl(seriesPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                 wxLC_REPORT | wxLC_SINGLE_SEL);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 70);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 85);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 270);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 210);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 130);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 80);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 70);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 420);
+    seriesSizer->Add(seriesList_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    seriesPanel_->SetSizer(seriesSizer);
 
     auto* hitSizer = new wxBoxSizer(wxVERTICAL);
-    hitsTitle_ = new wxStaticText(bottomPanel, wxID_ANY, "");
+    hitsTitle_ = new wxStaticText(hitsPanel_, wxID_ANY, wxEmptyString);
     hitsTitle_->SetFont(sectionFont);
-    hitSizer->Add(hitsTitle_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 8);
-    hitList_ = new wxListCtrl(bottomPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                              wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_VRULES);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 65);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 70);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 80);
-    hitList_->AppendColumn("Tag", wxLIST_FORMAT_LEFT, 105);
-    hitList_->AppendColumn("Name", wxLIST_FORMAT_LEFT, 205);
-    hitList_->AppendColumn("VR", wxLIST_FORMAT_LEFT, 50);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 320);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 300);
-    hitList_->AppendColumn("", wxLIST_FORMAT_LEFT, 250);
-    hitList_->AppendColumn("SOP Instance UID", wxLIST_FORMAT_LEFT, 350);
-    hitSizer->Add(hitList_, 1, wxEXPAND | wxLEFT | wxRIGHT, 8);
+    hitSizer->Add(hitsTitle_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 10);
+    hitList_ = new wxListCtrl(hitsPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                              wxLC_REPORT | wxLC_SINGLE_SEL);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 65);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 70);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 80);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 105);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 210);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 50);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 330);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 300);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 250);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 350);
+    hitSizer->Add(hitList_, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
 
     auto* hitButtons = new wxBoxSizer(wxHORIZONTAL);
-    showAll_ = new wxButton(bottomPanel, ID_SHOW_ALL, "");
-    hitButtons->Add(showAll_, 0, wxALL, 8);
-    hitButtons->AddStretchSpacer();
-    export_ = new wxButton(bottomPanel, ID_EXPORT, "");
+    showAll_ = new wxButton(hitsPanel_, ID_SHOW_ALL, wxEmptyString);
+    showAll_->SetMinSize(wxSize(150, 32));
+    export_ = new wxButton(hitsPanel_, ID_EXPORT, wxEmptyString);
+    export_->SetMinSize(wxSize(190, 32));
     export_->Enable(false);
-    hitButtons->Add(export_, 0, wxALL, 8);
+    hitButtons->Add(showAll_, 0, wxLEFT | wxTOP | wxBOTTOM, 10);
+    hitButtons->AddStretchSpacer();
+    hitButtons->Add(export_, 0, wxRIGHT | wxTOP | wxBOTTOM, 10);
     hitSizer->Add(hitButtons, 0, wxEXPAND);
-    bottomPanel->SetSizer(hitSizer);
+    hitsPanel_->SetSizer(hitSizer);
 
-    splitter->SplitHorizontally(topPanel, bottomPanel, 215);
-    splitter->SetMinimumPaneSize(125);
-    root->Add(splitter, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    splitter_->SplitHorizontally(seriesPanel_, hitsPanel_, 225);
+    splitter_->SetMinimumPaneSize(130);
+    splitter_->SetSashGravity(0.35);
+    root->Add(splitter_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-    footer_ = new wxStaticText(rootPanel_, wxID_ANY, "");
-    footer_->SetForegroundColour(wxColour(95, 99, 104));
+    footer_ = new wxStaticText(rootPanel_, wxID_ANY, wxEmptyString);
     root->Add(footer_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
     rootPanel_->SetSizer(root);
-}
-
-void MainFrame::ApplyModernStyle() {
-    const wxColour appBg(242, 244, 247);
-    const wxColour cardBg(255, 255, 255);
-    rootPanel_->SetBackgroundColour(appBg);
-
-    for (wxWindow* child : rootPanel_->GetChildren()) {
-        if (auto* panel = dynamic_cast<wxPanel*>(child)) panel->SetBackgroundColour(cardBg);
-    }
-
-    seriesList_->SetBackgroundColour(wxColour(255, 255, 255));
-    hitList_->SetBackgroundColour(wxColour(255, 255, 255));
-    Refresh();
 }
 
 void MainFrame::BindEvents() {
@@ -286,6 +350,9 @@ void MainFrame::BindEvents() {
     Bind(wxEVT_BUTTON, &MainFrame::OnShowAll, this, ID_SHOW_ALL);
     Bind(wxEVT_BUTTON, &MainFrame::OnExport, this, ID_EXPORT);
     Bind(wxEVT_CHOICE, &MainFrame::OnLanguageChanged, this, ID_LANGUAGE);
+    Bind(wxEVT_CHOICE, &MainFrame::OnThemeChanged, this, ID_THEME);
+    tag_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
+    folder_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     seriesList_->Bind(wxEVT_LIST_ITEM_SELECTED, &MainFrame::OnSeriesSelected, this);
     Bind(EVT_SCAN_PROGRESS, &MainFrame::OnProgress, this);
     Bind(EVT_SCAN_COMPLETE, &MainFrame::OnComplete, this);
@@ -301,61 +368,179 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString("ElementValueInspector (EVI) v0.2.8 — ") +
-        (language_ == UiLanguage::German ? "Deutsch" : "English"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.11"));
 
     subtitle_->SetLabel(L(
-        "DICOM-Studien durchsuchen, Tags finden und Elementwerte nach Serien und Instanzen anzeigen.",
-        "Inspect DICOM studies, find tags and display element values by series and instance."));
-    languageLabel_->SetLabel(L("Sprache:", "Language:"));
-    sourceTitle_->SetLabel(L("Studie / Ordner", "Study / Folder"));
-    folder_->SetHint(L("Ordner mit der DICOM-Studie auswählen ...", "Select folder containing the DICOM study ..."));
-    browse_->SetLabel(L("Ordner auswählen ...", "Choose folder ..."));
-    tagTitle_->SetLabel("DICOM-Tag");
-    tag_->SetHint(L("(0018,1030), 00181030 oder ProtocolName", "(0018,1030), 00181030 or ProtocolName"));
-    chooseTag_->SetLabel(L("Tag auswählen ...", "Select tag ..."));
-    start_->SetLabel(L("Studie durchsuchen", "Scan study"));
-    cancel_->SetLabel(L("Abbrechen", "Cancel"));
-    studySectionTitle_->SetLabel(L("Studieninformationen", "Study information"));
-    patientNameLabel_->SetLabel(L("Patient", "Patient"));
-    patientIdLabel_->SetLabel(L("Patient ID", "Patient ID"));
-    accessionLabel_->SetLabel(L("Accession Number", "Accession Number"));
-    studyDateLabel_->SetLabel(L("Study Date", "Study Date"));
-    studyDescriptionLabel_->SetLabel(L("Study Description", "Study Description"));
-    studyUidLabel_->SetLabel("Study Instance UID");
-    seriesTitle_->SetLabel(L("Serienübersicht", "Series overview"));
-    hitsTitle_->SetLabel(L("Treffer / Instanzen", "Matches / Instances"));
-    showAll_->SetLabel(L("Alle Treffer anzeigen", "Show all matches"));
-    export_->SetLabel(L("Treffer als CSV exportieren ...", "Export matches as CSV ..."));
+        L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
+        L"Inspect DICOM studies, find tags and review element values clearly."));
+    languageLabel_->SetLabel(L(L"Sprache", L"Language"));
+    themeLabel_->SetLabel(L(L"Darstellung", L"Appearance"));
+
+    const int themeSelection = themeChoice_->GetSelection();
+    themeChoice_->Clear();
+    themeChoice_->Append(L(L"Hell", L"Light"));
+    themeChoice_->Append(L(L"Dunkel", L"Dark"));
+    themeChoice_->SetSelection(themeSelection < 0 ? 0 : themeSelection);
+
+    sourceTitle_->SetLabel(L(L"Studienordner", L"Study folder"));
+    folder_->SetHint(L(L"Ordner mit der DICOM-Studie auswählen ...", L"Select the folder containing the DICOM study ..."));
+    browse_->SetLabel(L(L"Ordner auswählen", L"Choose folder"));
+    tagTitle_->SetLabel(L(L"DICOM-Tag", L"DICOM tag"));
+    tag_->SetHint(L(L"(0018,1030), 00181030 oder ProtocolName", L"(0018,1030), 00181030 or ProtocolName"));
+    chooseTag_->SetLabel(L(L"Tag auswählen", L"Select tag"));
+    start_->SetLabel(L(L"Studie durchsuchen", L"Scan study"));
+    cancel_->SetLabel(L(L"Abbrechen", L"Cancel"));
+
+    studySectionTitle_->SetLabel(L(L"STUDIE", L"STUDY"));
+    patientNameLabel_->SetLabel(L(L"Patient", L"Patient"));
+    patientIdLabel_->SetLabel(L(L"Patienten-ID", L"Patient ID"));
+    accessionLabel_->SetLabel(L(L"Accession", L"Accession"));
+    studyDateLabel_->SetLabel(L(L"Datum", L"Date"));
+    studyDescriptionLabel_->SetLabel(L(L"Beschreibung", L"Description"));
+    studyUidLabel_->SetLabel(L(L"Study UID", L"Study UID"));
+
+    seriesTitle_->SetLabel(L(L"Serien", L"Series"));
+    hitsTitle_->SetLabel(L(L"Treffer und Instanzen", L"Matches and instances"));
+    showAll_->SetLabel(L(L"Alle Treffer", L"Show all"));
+    export_->SetLabel(L(L"CSV exportieren", L"Export CSV"));
     footer_->SetLabel(L(
-        "Lokale Verarbeitung. Große Binary-/PixelData-Werte werden nicht in die Anzeige geladen.",
-        "Local processing only. Large binary/Pixel Data values are not loaded into the display."));
+        L"Alle DICOM-Daten werden ausschließlich lokal verarbeitet. PixelData und große Binärwerte werden nicht in die Ergebnisanzeige geladen.",
+        L"All DICOM data is processed locally. Pixel Data and large binary values are not loaded into the result view."));
 
-    SetColumnTitle(seriesList_, 0, L("Serie", "Series"));
-    SetColumnTitle(seriesList_, 1, L("Modalität", "Modality"));
-    SetColumnTitle(seriesList_, 2, L("Serienbeschreibung", "Series Description"));
-    SetColumnTitle(seriesList_, 3, "Protocol Name");
-    SetColumnTitle(seriesList_, 4, "Body Part");
-    SetColumnTitle(seriesList_, 5, L("Instanzen", "Instances"));
-    SetColumnTitle(seriesList_, 6, L("Treffer", "Matches"));
-    SetColumnTitle(seriesList_, 7, "Series Instance UID");
+    SetColumnTitle(seriesList_, 0, L(L"Serie", L"Series"));
+    SetColumnTitle(seriesList_, 1, L(L"Modalität", L"Modality"));
+    SetColumnTitle(seriesList_, 2, L(L"Serienbeschreibung", L"Series description"));
+    SetColumnTitle(seriesList_, 3, L(L"Protokollname", L"Protocol name"));
+    SetColumnTitle(seriesList_, 4, L(L"Körperregion", L"Body part"));
+    SetColumnTitle(seriesList_, 5, L(L"Instanzen", L"Instances"));
+    SetColumnTitle(seriesList_, 6, L(L"Treffer", L"Matches"));
+    SetColumnTitle(seriesList_, 7, wxString(L"Series Instance UID"));
 
-    SetColumnTitle(hitList_, 0, L("Serie", "Series"));
-    SetColumnTitle(hitList_, 1, L("Instanz", "Instance"));
-    SetColumnTitle(hitList_, 2, L("Modalität", "Modality"));
-    SetColumnTitle(hitList_, 3, "Tag");
-    SetColumnTitle(hitList_, 4, "Name");
-    SetColumnTitle(hitList_, 5, "VR");
-    SetColumnTitle(hitList_, 6, L("Wert", "Value"));
-    SetColumnTitle(hitList_, 7, L("Sequence-Pfad", "Sequence Path"));
-    SetColumnTitle(hitList_, 8, L("Datei", "File"));
-    SetColumnTitle(hitList_, 9, "SOP Instance UID");
+    SetColumnTitle(hitList_, 0, L(L"Serie", L"Series"));
+    SetColumnTitle(hitList_, 1, L(L"Instanz", L"Instance"));
+    SetColumnTitle(hitList_, 2, L(L"Modalität", L"Modality"));
+    SetColumnTitle(hitList_, 3, wxString(L"Tag"));
+    SetColumnTitle(hitList_, 4, L(L"Name", L"Name"));
+    SetColumnTitle(hitList_, 5, wxString(L"VR"));
+    SetColumnTitle(hitList_, 6, L(L"Wert", L"Value"));
+    SetColumnTitle(hitList_, 7, L(L"Sequence-Pfad", L"Sequence path"));
+    SetColumnTitle(hitList_, 8, L(L"Datei", L"File"));
+    SetColumnTitle(hitList_, 9, wxString(L"SOP Instance UID"));
 
     if (result_) UpdateStatusSummary();
-    else status_->SetLabel(L("Bereit.", "Ready."));
+    else status_->SetLabel(L(L"Bereit.", L"Ready."));
 
     rootPanel_->Layout();
     Layout();
+}
+
+void MainFrame::ApplyTheme() {
+    const Palette p = BuildThemePalette(theme_);
+    SetBackgroundColour(p.window);
+    rootPanel_->SetBackgroundColour(p.window);
+    headerPanel_->SetBackgroundColour(p.window);
+    searchCard_->SetBackgroundColour(p.card);
+    studyCard_->SetBackgroundColour(p.card);
+    seriesPanel_->SetBackgroundColour(p.card);
+    hitsPanel_->SetBackgroundColour(p.card);
+    splitter_->SetBackgroundColour(p.separator);
+
+    const auto setText = [&](wxStaticText* control, const wxColour& colour) {
+        if (control) control->SetForegroundColour(colour);
+    };
+
+    setText(title_, p.text);
+    setText(version_, p.accent);
+    setText(subtitle_, p.muted);
+    setText(languageLabel_, p.muted);
+    setText(themeLabel_, p.muted);
+    setText(sourceTitle_, p.text);
+    setText(tagTitle_, p.text);
+    setText(tagInfo_, p.muted);
+    setText(status_, p.muted);
+    setText(studySectionTitle_, p.accent);
+    setText(patientNameLabel_, p.muted);
+    setText(patientIdLabel_, p.muted);
+    setText(accessionLabel_, p.muted);
+    setText(studyDateLabel_, p.muted);
+    setText(studyDescriptionLabel_, p.muted);
+    setText(studyUidLabel_, p.muted);
+    setText(patientName_, p.text);
+    setText(patientId_, p.text);
+    setText(accession_, p.text);
+    setText(studyDate_, p.text);
+    setText(studyDescription_, p.text);
+    setText(studyUid_, p.text);
+    setText(seriesTitle_, p.text);
+    setText(hitsTitle_, p.text);
+    setText(footer_, p.muted);
+
+    for (wxTextCtrl* control : {folder_, tag_}) {
+        control->SetBackgroundColour(p.input);
+        control->SetForegroundColour(p.text);
+    }
+    for (wxChoice* control : {languageChoice_, themeChoice_}) {
+        control->SetBackgroundColour(p.input);
+        control->SetForegroundColour(p.text);
+    }
+
+    seriesList_->SetBackgroundColour(p.table);
+    seriesList_->SetForegroundColour(p.text);
+    hitList_->SetBackgroundColour(p.table);
+    hitList_->SetForegroundColour(p.text);
+
+#ifdef _WIN32
+    const bool dark = theme_ == UiTheme::Dark;
+    ApplyExplorerTheme(seriesList_, dark);
+    ApplyExplorerTheme(hitList_, dark);
+    for (wxWindow* control : {
+             static_cast<wxWindow*>(folder_), static_cast<wxWindow*>(tag_),
+             static_cast<wxWindow*>(languageChoice_), static_cast<wxWindow*>(themeChoice_),
+             static_cast<wxWindow*>(browse_), static_cast<wxWindow*>(chooseTag_),
+             static_cast<wxWindow*>(start_), static_cast<wxWindow*>(cancel_),
+             static_cast<wxWindow*>(showAll_), static_cast<wxWindow*>(export_),
+             static_cast<wxWindow*>(gauge_)}) {
+        ApplyExplorerTheme(control, dark);
+    }
+#endif
+
+    ApplyListRowTheme(seriesList_);
+    ApplyListRowTheme(hitList_);
+    ApplyNativeChrome();
+
+    rootPanel_->Refresh();
+    searchCard_->Refresh();
+    studyCard_->Refresh();
+    seriesPanel_->Refresh();
+    hitsPanel_->Refresh();
+    seriesList_->Refresh();
+    hitList_->Refresh();
+    Layout();
+}
+
+void MainFrame::ApplyNativeChrome() {
+#ifdef _WIN32
+    HWND hwnd = reinterpret_cast<HWND>(GetHandle());
+    if (!hwnd) return;
+
+    const BOOL dark = theme_ == UiTheme::Dark ? TRUE : FALSE;
+    constexpr DWORD kImmersiveDarkMode = 20;
+    DwmSetWindowAttribute(hwnd, kImmersiveDarkMode, &dark, sizeof(dark));
+
+    // Rounded corners on Windows 11; harmlessly ignored on older systems.
+    constexpr DWORD kWindowCornerPreference = 33;
+    constexpr DWORD kRound = 2;
+    DwmSetWindowAttribute(hwnd, kWindowCornerPreference, &kRound, sizeof(kRound));
+#endif
+}
+
+void MainFrame::ApplyListRowTheme(wxListCtrl* list) {
+    if (!list) return;
+    const Palette p = BuildThemePalette(theme_);
+    for (long row = 0; row < list->GetItemCount(); ++row) {
+        list->SetItemBackgroundColour(row, (row % 2) ? p.alternate : p.table);
+        list->SetItemTextColour(row, p.text);
+    }
 }
 
 void MainFrame::OnLanguageChanged(wxCommandEvent&) {
@@ -363,14 +548,19 @@ void MainFrame::OnLanguageChanged(wxCommandEvent&) {
     ApplyLanguage();
 }
 
+void MainFrame::OnThemeChanged(wxCommandEvent&) {
+    theme_ = themeChoice_->GetSelection() == 1 ? UiTheme::Dark : UiTheme::Light;
+    ApplyTheme();
+}
+
 void MainFrame::OnChooseFolder(wxCommandEvent&) {
-    wxDirDialog dialog(this, L("DICOM-Studienordner auswählen", "Select DICOM study folder"),
+    wxDirDialog dialog(this, L(L"DICOM-Studienordner auswählen", L"Select DICOM study folder"),
                        folder_->GetValue(), wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
     if (dialog.ShowModal() == wxID_OK) folder_->SetValue(dialog.GetPath());
 }
 
 void MainFrame::OnChooseTag(wxCommandEvent&) {
-    TagDialog dialog(this, language_);
+    TagDialog dialog(this, language_, theme_);
     if (dialog.ShowModal() == wxID_OK && dialog.HasSelection()) {
         const auto selected = dialog.SelectedTag();
         std::ostringstream exact;
@@ -378,6 +568,7 @@ void MainFrame::OnChooseTag(wxCommandEvent&) {
               << std::setw(4) << selected.group << ',' << std::setw(4) << selected.element << ')';
         tag_->SetValue(W(exact.str()));
         tagInfo_->SetLabel(W(selected.name + "  VR=" + selected.vr + "  VM=" + selected.vm));
+        tagInfo_->SetToolTip(tagInfo_->GetLabel());
     }
 }
 
@@ -385,31 +576,32 @@ void MainFrame::OnStart(wxCommandEvent&) { StartScan(); }
 
 void MainFrame::StartScan() {
     if (worker_.joinable()) {
-        wxMessageBox(L("Es läuft bereits eine Suche.", "A scan is already running."),
-                     "ElementValueInspector (EVI)", wxOK | wxICON_INFORMATION, this);
+        wxMessageBox(L(L"Es läuft bereits eine Suche.", L"A scan is already running."),
+                     wxString(L"ElementValueInspector (EVI)"), wxOK | wxICON_INFORMATION, this);
         return;
     }
 
     const wxString folderText = folder_->GetValue();
     if (folderText.empty() || !std::filesystem::is_directory(std::filesystem::path(folderText.ToStdWstring()))) {
-        wxMessageBox(L("Bitte einen gültigen Studienordner auswählen.", "Please select a valid study folder."),
-                     L("Ordner fehlt", "Folder missing"), wxOK | wxICON_WARNING, this);
+        wxMessageBox(L(L"Bitte einen gültigen Studienordner auswählen.", L"Please select a valid study folder."),
+                     L(L"Ordner fehlt", L"Folder missing"), wxOK | wxICON_WARNING, this);
         return;
     }
 
     std::string error;
     auto target = DicomUtils::ParseTag(U8(tag_->GetValue()), error, language_);
     if (!target) {
-        wxMessageBox(W(error), L("Ungültiger DICOM-Tag", "Invalid DICOM tag"), wxOK | wxICON_WARNING, this);
+        wxMessageBox(W(error), L(L"Ungültiger DICOM-Tag", L"Invalid DICOM tag"), wxOK | wxICON_WARNING, this);
         return;
     }
 
     tagInfo_->SetLabel(W(DicomUtils::TagName(*target)));
+    tagInfo_->SetToolTip(tagInfo_->GetLabel());
     result_.reset();
     seriesList_->DeleteAllItems();
     hitList_->DeleteAllItems();
     gauge_->SetValue(0);
-    status_->SetLabel(L("Suche wird gestartet ...", "Starting scan ..."));
+    status_->SetLabel(L(L"Suche wird gestartet ...", L"Starting scan ..."));
     start_->Enable(false);
     cancel_->Enable(true);
     export_->Enable(false);
@@ -429,8 +621,8 @@ void MainFrame::StartScan() {
                     auto* event = new wxThreadEvent(EVT_SCAN_PROGRESS);
                     event->SetInt(total ? static_cast<int>((current * 100) / total) : 0);
                     const wxString prefix = scanLanguage == UiLanguage::German
-                        ? wxString::Format("Datei %zu von %zu: ", current, total)
-                        : wxString::Format("File %zu of %zu: ", current, total);
+                        ? wxString::Format(L"Datei %zu von %zu: ", current, total)
+                        : wxString::Format(L"File %zu of %zu: ", current, total);
                     event->SetString(prefix + wxString(path.filename().wstring()));
                     wxQueueEvent(this, event);
                 });
@@ -445,8 +637,8 @@ void MainFrame::StartScan() {
         } catch (...) {
             auto* event = new wxThreadEvent(EVT_SCAN_ERROR);
             event->SetString(scanLanguage == UiLanguage::German
-                ? "Unbekannter Fehler beim Durchsuchen der DICOM-Studie."
-                : "Unknown error while scanning the DICOM study.");
+                ? wxString(L"Unbekannter Fehler beim Durchsuchen der DICOM-Studie.")
+                : wxString(L"Unknown error while scanning the DICOM study."));
             wxQueueEvent(this, event);
         }
     });
@@ -455,7 +647,7 @@ void MainFrame::StartScan() {
 void MainFrame::OnCancel(wxCommandEvent&) {
     cancelRequested_.store(true);
     cancel_->Enable(false);
-    status_->SetLabel(L("Abbruch angefordert ...", "Cancellation requested ..."));
+    status_->SetLabel(L(L"Abbruch angefordert ...", L"Cancellation requested ..."));
 }
 
 void MainFrame::OnProgress(wxThreadEvent& event) {
@@ -478,8 +670,8 @@ void MainFrame::OnScanError(wxThreadEvent& event) {
     start_->Enable(true);
     cancel_->Enable(false);
     languageChoice_->Enable(true);
-    status_->SetLabel(L("Fehler.", "Error."));
-    wxMessageBox(event.GetString(), L("Fehler beim DICOM-Scan", "DICOM scan error"), wxOK | wxICON_ERROR, this);
+    status_->SetLabel(L(L"Fehler.", L"Error."));
+    wxMessageBox(event.GetString(), L(L"Fehler beim DICOM-Scan", L"DICOM scan error"), wxOK | wxICON_ERROR, this);
 }
 
 void MainFrame::PopulateResult() {
@@ -495,20 +687,20 @@ void MainFrame::UpdateStatusSummary() {
     const auto& s = result_->stats;
     if (!s.cancelled) gauge_->SetValue(100);
     if (language_ == UiLanguage::German) {
-        const wxString state = s.cancelled ? "Abgebrochen." : "Fertig.";
+        const wxString state = s.cancelled ? wxString(L"Abgebrochen.") : wxString(L"Fertig.");
         status_->SetLabel(state + wxString::Format(
-            " %zu DICOM-Dateien, %zu Dateien mit Tag, %zu Treffer, %zu Serien, %zu Lesefehler.",
+            L" %zu DICOM-Dateien, %zu Dateien mit Tag, %zu Treffer, %zu Serien, %zu Lesefehler.",
             s.dicomFiles, s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
     } else {
-        const wxString state = s.cancelled ? "Cancelled." : "Done.";
+        const wxString state = s.cancelled ? wxString(L"Cancelled.") : wxString(L"Done.");
         status_->SetLabel(state + wxString::Format(
-            " %zu DICOM files, %zu files with tag, %zu matches, %zu series, %zu read errors.",
+            L" %zu DICOM files, %zu files with tag, %zu matches, %zu series, %zu read errors.",
             s.dicomFiles, s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
     }
 }
 
 void MainFrame::SetStudyValue(wxStaticText* label, const std::string& value) {
-    const wxString text = value.empty() ? wxString("-") : W(value);
+    const wxString text = value.empty() ? wxString(L"-") : W(value);
     label->SetLabel(text);
     label->SetToolTip(text);
 }
@@ -529,6 +721,7 @@ void MainFrame::UpdateStudyLabels() {
     SetStudyValue(studyDate_, result_->study.studyDate);
     SetStudyValue(studyDescription_, result_->study.studyDescription);
     SetStudyValue(studyUid_, result_->study.studyInstanceUid);
+    studyCard_->Layout();
 }
 
 void MainFrame::PopulateSeries() {
@@ -554,11 +747,12 @@ void MainFrame::PopulateSeries() {
         seriesList_->SetItem(row, 2, W(s->seriesDescription));
         seriesList_->SetItem(row, 3, W(s->protocolName));
         seriesList_->SetItem(row, 4, W(s->bodyPart));
-        seriesList_->SetItem(row, 5, wxString::Format("%zu", s->instances.size()));
-        seriesList_->SetItem(row, 6, wxString::Format("%zu", s->hits));
+        seriesList_->SetItem(row, 5, wxString::Format(L"%zu", s->instances.size()));
+        seriesList_->SetItem(row, 6, wxString::Format(L"%zu", s->hits));
         seriesList_->SetItem(row, 7, W(s->seriesInstanceUid));
         visibleSeriesKeys_.push_back(s->seriesKey);
     }
+    ApplyListRowTheme(seriesList_);
     seriesList_->Thaw();
 }
 
@@ -580,6 +774,7 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         hitList_->SetItem(row, 8, W(h.relativeFile));
         hitList_->SetItem(row, 9, W(h.sopInstanceUid));
     }
+    ApplyListRowTheme(hitList_);
     hitList_->Thaw();
 }
 
@@ -591,7 +786,9 @@ void MainFrame::OnSeriesSelected(wxListEvent& event) {
 }
 
 void MainFrame::OnShowAll(wxCommandEvent&) {
-    for (long i = 0; i < seriesList_->GetItemCount(); ++i) seriesList_->SetItemState(i, 0, wxLIST_STATE_SELECTED);
+    for (long i = 0; i < seriesList_->GetItemCount(); ++i) {
+        seriesList_->SetItemState(i, 0, wxLIST_STATE_SELECTED);
+    }
     PopulateHits();
 }
 
@@ -600,15 +797,16 @@ void MainFrame::OnExport(wxCommandEvent&) { ExportCsv(); }
 void MainFrame::ExportCsv() {
     if (!result_ || result_->hits.empty()) return;
 
-    wxFileDialog dialog(this, L("Treffer als CSV speichern", "Save matches as CSV"), "", "dicom_tag_matches.csv",
-                        "CSV (*.csv)|*.csv", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dialog(this, L(L"Treffer als CSV speichern", L"Save matches as CSV"), wxEmptyString,
+                        wxString(L"dicom_tag_matches.csv"), wxString(L"CSV (*.csv)|*.csv"),
+                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dialog.ShowModal() != wxID_OK) return;
 
     const std::filesystem::path path(dialog.GetPath().ToStdWstring());
     std::ofstream out(path, std::ios::binary);
     if (!out) {
-        wxMessageBox(L("Die CSV-Datei konnte nicht geschrieben werden.", "The CSV file could not be written."),
-                     L("CSV-Export", "CSV export"), wxOK | wxICON_ERROR, this);
+        wxMessageBox(L(L"Die CSV-Datei konnte nicht geschrieben werden.", L"The CSV file could not be written."),
+                     L(L"CSV-Export", L"CSV export"), wxOK | wxICON_ERROR, this);
         return;
     }
 
@@ -639,8 +837,8 @@ void MainFrame::ExportCsv() {
             << CsvEscape(h.fullFile) << "\r\n";
     }
 
-    wxMessageBox(L("CSV wurde erfolgreich gespeichert.", "CSV was saved successfully."),
-                 L("CSV-Export", "CSV export"), wxOK | wxICON_INFORMATION, this);
+    wxMessageBox(L(L"CSV wurde erfolgreich gespeichert.", L"CSV was saved successfully."),
+                 L(L"CSV-Export", L"CSV export"), wxOK | wxICON_INFORMATION, this);
 }
 
 void MainFrame::StopWorker() {

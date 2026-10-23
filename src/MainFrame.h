@@ -2,6 +2,7 @@
 
 #include "Models.h"
 #include "UiLanguage.h"
+#include "UiTheme.h"
 
 #include <atomic>
 #include <filesystem>
@@ -15,6 +16,7 @@ class wxButton;
 class wxChoice;
 class wxGauge;
 class wxPanel;
+class wxSplitterWindow;
 class wxStaticText;
 class wxTextCtrl;
 class wxThreadEvent;
@@ -28,7 +30,9 @@ private:
     void BuildUi();
     void BindEvents();
     void ApplyLanguage();
-    void ApplyModernStyle();
+    void ApplyTheme();
+    void ApplyNativeChrome();
+    void ApplyListRowTheme(wxListCtrl* list);
     void StartScan();
     void StopWorker();
     void PopulateResult();
@@ -37,7 +41,7 @@ private:
     void UpdateStudyLabels();
     void UpdateStatusSummary();
     void ExportCsv();
-    wxString L(const char* de, const char* en) const;
+    wxString L(const wchar_t* de, const wchar_t* en) const;
     void SetColumnTitle(wxListCtrl* list, int column, const wxString& title);
     void SetStudyValue(wxStaticText* label, const std::string& value);
 
@@ -48,6 +52,7 @@ private:
     void OnShowAll(wxCommandEvent& event);
     void OnExport(wxCommandEvent& event);
     void OnLanguageChanged(wxCommandEvent& event);
+    void OnThemeChanged(wxCommandEvent& event);
     void OnSeriesSelected(wxListEvent& event);
     void OnProgress(wxThreadEvent& event);
     void OnComplete(wxThreadEvent& event);
@@ -55,12 +60,23 @@ private:
     void OnClose(wxCloseEvent& event);
 
     UiLanguage language_{UiLanguage::German};
+    UiTheme theme_{UiTheme::Light};
 
     wxPanel* rootPanel_{};
+    wxPanel* headerPanel_{};
+    wxPanel* searchCard_{};
+    wxPanel* studyCard_{};
+    wxPanel* seriesPanel_{};
+    wxPanel* hitsPanel_{};
+    wxSplitterWindow* splitter_{};
+
     wxStaticText* title_{};
+    wxStaticText* version_{};
     wxStaticText* subtitle_{};
     wxStaticText* languageLabel_{};
     wxChoice* languageChoice_{};
+    wxStaticText* themeLabel_{};
+    wxChoice* themeChoice_{};
 
     wxStaticText* sourceTitle_{};
     wxTextCtrl* folder_{};

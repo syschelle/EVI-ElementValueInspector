@@ -8,11 +8,11 @@ public:
     bool OnInit() override {
         if (!dcmDataDict.isDictionaryLoaded()) {
             wxMessageBox(
-                "Das eingebaute DICOM-Dictionary konnte nicht geladen werden.\n"
-                "The embedded DICOM dictionary could not be loaded.\n\n"
-                "Der Build muss DCMTK mit DCMTK_DEFAULT_DICT=builtin erzeugen.\n"
-                "The build must use DCMTK_DEFAULT_DICT=builtin.",
-                "DICOM Dictionary", wxOK | wxICON_ERROR);
+                wxString(L"Das eingebaute DICOM-Dictionary konnte nicht geladen werden.\n"
+                         L"The embedded DICOM dictionary could not be loaded.\n\n"
+                         L"Der Build muss DCMTK mit DCMTK_DEFAULT_DICT=builtin erzeugen.\n"
+                         L"The build must use DCMTK_DEFAULT_DICT=builtin."),
+                wxString(L"DICOM Dictionary"), wxOK | wxICON_ERROR);
             return false;
         }
         auto* frame = new MainFrame();
