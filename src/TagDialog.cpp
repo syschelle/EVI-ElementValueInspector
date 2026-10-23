@@ -1,8 +1,6 @@
 #include "TagDialog.h"
-#include "DicomUtils.h"
 
 #include <wx/button.h>
-#include <wx/listctrl.h>
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -10,7 +8,6 @@
 #include <wx/tokenzr.h>
 
 #include <algorithm>
-#include <sstream>
 
 namespace {
 
@@ -26,45 +23,64 @@ std::vector<wxString> SplitTerms(wxString filter) {
     return result;
 }
 
+void SetColumnTitle(wxListCtrl* list, int column, const wxString& title) {
+    wxListItem item;
+    item.SetMask(wxLIST_MASK_TEXT);
+    item.SetText(title);
+    list->SetColumn(column, item);
+}
+
 } // namespace
 
-TagDialog::TagDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, "DICOM-Tag auswaehlen", wxDefaultPosition, wxSize(950, 680),
+TagDialog::TagDialog(wxWindow* parent, UiLanguage language)
+    : wxDialog(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(980, 680),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+      language_(language),
       allTags_(DicomUtils::LoadDictionary())
 {
+    SetTitle(L("DICOM-Tag auswählen", "Select DICOM Tag"));
+    SetBackgroundColour(wxColour(247, 248, 250));
+
     auto* root = new wxBoxSizer(wxVERTICAL);
 
     auto* title = new wxStaticText(this, wxID_ANY,
-        "Standard-DICOM-Tags aus dem eingebetteten DCMTK-Dictionary");
+        L("Standard-DICOM-Tags aus dem eingebetteten DCMTK-Dictionary",
+          "Standard DICOM tags from the embedded DCMTK dictionary"));
     wxFont titleFont = title->GetFont();
+    titleFont.SetPointSize(titleFont.GetPointSize() + 2);
     titleFont.MakeBold();
     title->SetFont(titleFont);
-    root->Add(title, 0, wxALL, 10);
+    root->Add(title, 0, wxLEFT | wxRIGHT | wxTOP, 16);
+
+    auto* hint = new wxStaticText(this, wxID_ANY,
+        L("Suche nach Tagnummer, Name, VR oder VM.", "Search by tag number, name, VR or VM."));
+    hint->SetForegroundColour(wxColour(95, 99, 104));
+    root->Add(hint, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 16);
 
     filter_ = new wxTextCtrl(this, wxID_ANY);
-    filter_->SetHint("Suchen nach Tagnummer, Name, VR oder VM, z. B. 0018 1030 Protocol Name SQ");
-    root->Add(filter_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    filter_->SetHint(L("z. B. 0018 1030 Protocol Name SQ", "e.g. 0018 1030 Protocol Name SQ"));
+    root->Add(filter_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
 
     list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                            wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_VRULES);
     list_->AppendColumn("Tag", wxLIST_FORMAT_LEFT, 170);
-    list_->AppendColumn("Name / Keyword", wxLIST_FORMAT_LEFT, 430);
+    list_->AppendColumn(L("Name / Keyword", "Name / Keyword"), wxLIST_FORMAT_LEFT, 450);
     list_->AppendColumn("VR", wxLIST_FORMAT_LEFT, 70);
     list_->AppendColumn("VM", wxLIST_FORMAT_LEFT, 80);
-    list_->AppendColumn("Standard", wxLIST_FORMAT_LEFT, 130);
-    root->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
+    list_->AppendColumn(L("Standard", "Standard"), wxLIST_FORMAT_LEFT, 130);
+    root->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT, 16);
 
     count_ = new wxStaticText(this, wxID_ANY, "");
-    root->Add(count_, 0, wxLEFT | wxRIGHT | wxTOP, 10);
+    count_->SetForegroundColour(wxColour(95, 99, 104));
+    root->Add(count_, 0, wxLEFT | wxRIGHT | wxTOP, 16);
 
     auto* buttons = new wxBoxSizer(wxHORIZONTAL);
     buttons->AddStretchSpacer();
-    auto* choose = new wxButton(this, wxID_OK, "Tag uebernehmen");
-    auto* cancel = new wxButton(this, wxID_CANCEL, "Abbrechen");
-    buttons->Add(choose, 0, wxALL, 5);
-    buttons->Add(cancel, 0, wxALL, 5);
-    root->Add(buttons, 0, wxEXPAND | wxALL, 5);
+    auto* choose = new wxButton(this, wxID_OK, L("Tag übernehmen", "Use Tag"));
+    auto* cancel = new wxButton(this, wxID_CANCEL, L("Abbrechen", "Cancel"));
+    buttons->Add(choose, 0, wxALL, 6);
+    buttons->Add(cancel, 0, wxALL, 6);
+    root->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
     SetSizer(root);
     RebuildList();
@@ -73,6 +89,10 @@ TagDialog::TagDialog(wxWindow* parent)
     list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, &TagDialog::OnActivate, this);
     choose->Bind(wxEVT_BUTTON, &TagDialog::OnChoose, this);
     filter_->SetFocus();
+}
+
+wxString TagDialog::L(const char* de, const char* en) const {
+    return wxString::FromUTF8(language_ == UiLanguage::German ? de : en);
 }
 
 bool TagDialog::HasSelection() const { return hasSelection_; }
@@ -115,7 +135,11 @@ void TagDialog::RebuildList() {
     }
     list_->Thaw();
 
-    count_->SetLabel(wxString::Format("%zu von %zu Dictionary-Eintraegen", visible_.size(), allTags_.size()));
+    if (language_ == UiLanguage::German) {
+        count_->SetLabel(wxString::Format("%zu von %zu Dictionary-Einträgen", visible_.size(), allTags_.size()));
+    } else {
+        count_->SetLabel(wxString::Format("%zu of %zu dictionary entries", visible_.size(), allTags_.size()));
+    }
 }
 
 void TagDialog::OnFilter(wxCommandEvent&) { RebuildList(); }
@@ -128,7 +152,8 @@ void TagDialog::OnActivate(wxListEvent&) {
 void TagDialog::OnChoose(wxCommandEvent&) {
     const long row = list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (row < 0 || static_cast<std::size_t>(row) >= visible_.size()) {
-        wxMessageBox("Bitte zuerst einen DICOM-Tag auswaehlen.", "Keine Auswahl", wxOK | wxICON_INFORMATION, this);
+        wxMessageBox(L("Bitte zuerst einen DICOM-Tag auswählen.", "Please select a DICOM tag first."),
+                     L("Keine Auswahl", "No selection"), wxOK | wxICON_INFORMATION, this);
         return;
     }
     selected_ = allTags_[visible_[static_cast<std::size_t>(row)]];

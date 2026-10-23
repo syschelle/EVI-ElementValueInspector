@@ -9,7 +9,9 @@ public:
         if (!dcmDataDict.isDictionaryLoaded()) {
             wxMessageBox(
                 "Das eingebaute DICOM-Dictionary konnte nicht geladen werden.\n"
-                "Der Build muss DCMTK mit DCMTK_DEFAULT_DICT=builtin erzeugen.",
+                "The embedded DICOM dictionary could not be loaded.\n\n"
+                "Der Build muss DCMTK mit DCMTK_DEFAULT_DICT=builtin erzeugen.\n"
+                "The build must use DCMTK_DEFAULT_DICT=builtin.",
                 "DICOM Dictionary", wxOK | wxICON_ERROR);
             return false;
         }

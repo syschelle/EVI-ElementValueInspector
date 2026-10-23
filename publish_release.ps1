@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.7"
+    [string]$Version = "0.2.8"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +17,7 @@ if (-not (Test-Path $Exe)) {
     throw "evi.exe fehlt unter dist. Zuerst bauen: cmake --build build --config Release"
 }
 if (-not (Test-Path $Sha)) {
-    throw "evi.exe.sha256 fehlt unter dist. Bitte EVI v0.2.7 neu bauen."
+    throw "evi.exe.sha256 fehlt unter dist. Bitte EVI v0.2.8 neu bauen."
 }
 if (-not (Test-Path $Notes)) {
     throw "RELEASE.md fehlt im Projektverzeichnis."

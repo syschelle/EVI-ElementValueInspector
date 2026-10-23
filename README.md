@@ -1,4 +1,12 @@
-# ElementValueInspector (EVI) v0.2.7
+# ElementValueInspector (EVI) v0.2.8
+
+## User interface languages
+
+EVI provides a selectable **German / English** user interface. The language can be changed from the main window without restarting the application. The tag picker, table headings, scan status, buttons, dialogs, and errors follow the selected language.
+
+## User interface
+
+The v0.2.8 interface uses a compact study information card so the series and instance/match tables receive more vertical space. Long values such as Study Instance UID are visually shortened and remain available as tooltips.
 
 Native Windows DICOM study and tag inspection application written in C++.
 
@@ -167,10 +175,10 @@ Danach kann der GitHub Release nach dem Commit/Push mit folgendem Skript erstell
 .\publish_release.ps1
 ```
 
-Das Skript erstellt den Release `v0.2.7` mit:
+Das Skript erstellt den Release `v0.2.8` mit:
 
 - `evi.exe`
 - `evi.exe.sha256`
 - Release-Text aus `RELEASE.md`
 
-Existiert der Release bereits, werden die beiden Assets mit `--clobber` aktualisiert. Existiert er noch nicht, wird er automatisch neu angelegt. v0.2.7 behebt dabei den Abbruch durch die erwartete GitHub-CLI-Meldung `release not found`.
+Existiert der Release bereits, werden die beiden Assets mit `--clobber` aktualisiert. Existiert er noch nicht, wird er automatisch neu angelegt. v0.2.8 behebt dabei den Abbruch durch die erwartete GitHub-CLI-Meldung `release not found`.

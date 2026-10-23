@@ -72,6 +72,7 @@ void CollectMatches(
     const std::filesystem::path& file,
     DcmDataset* ds,
     const std::string& seriesKey,
+    UiLanguage language,
     std::vector<ScanHit>& hits)
 {
     if (!container) return;
@@ -89,7 +90,7 @@ void CollectMatches(
         hit.tag = DicomUtils::FormatTag(target);
         hit.tagName = DicomUtils::TagName(obj->getTag().getTagKey());
         hit.vr = DcmVR(obj->getVR()).getVRName();
-        hit.value = DicomUtils::SafeElementValue(obj);
+        hit.value = DicomUtils::SafeElementValue(obj, language);
         hit.sequencePath = DicomUtils::SequencePath(stack, pathPrefix);
 
         std::error_code ec;
@@ -108,6 +109,7 @@ std::shared_ptr<ScanResult> DicomScanner::Scan(
     uint16_t group,
     uint16_t element,
     std::atomic_bool& cancel,
+    UiLanguage language,
     ProgressCallback progress)
 {
     auto result = std::make_shared<ScanResult>();
@@ -153,8 +155,8 @@ std::shared_ptr<ScanResult> DicomScanner::Scan(
         SeriesInfo& series = GetSeries(*result, ds, file);
 
         const std::size_t before = result->hits.size();
-        CollectMatches(ds, target, {}, root, file, ds, series.seriesKey, result->hits);
-        CollectMatches(dcm.getMetaInfo(), target, "File Meta Information", root, file, ds, series.seriesKey, result->hits);
+        CollectMatches(ds, target, {}, root, file, ds, series.seriesKey, language, result->hits);
+        CollectMatches(dcm.getMetaInfo(), target, language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information", root, file, ds, series.seriesKey, language, result->hits);
         const std::size_t added = result->hits.size() - before;
 
         if (added > 0) {

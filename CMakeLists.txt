@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(ElementValueInspector VERSION 0.2.7 LANGUAGES C CXX)
+project(ElementValueInspector VERSION 0.2.8 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,6 +72,7 @@ add_executable(evi WIN32
     src/DicomUtils.cpp
     src/DicomUtils.h
     src/Models.h
+    src/UiLanguage.h
     src/evi.rc
 )
 

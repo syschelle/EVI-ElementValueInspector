@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Models.h"
+#include "UiLanguage.h"
 
 #include <atomic>
 #include <filesystem>
@@ -16,5 +17,6 @@ public:
         uint16_t group,
         uint16_t element,
         std::atomic_bool& cancel,
+        UiLanguage language,
         ProgressCallback progress);
 };

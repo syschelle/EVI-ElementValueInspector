@@ -1,33 +1,35 @@
 #pragma once
 
-#include "Models.h"
+#include "DicomUtils.h"
+#include "UiLanguage.h"
 
 #include <wx/dialog.h>
 #include <wx/listctrl.h>
-#include <vector>
 
 class wxStaticText;
 class wxTextCtrl;
 
-class TagDialog : public wxDialog {
+class TagDialog final : public wxDialog {
 public:
-    explicit TagDialog(wxWindow* parent);
+    TagDialog(wxWindow* parent, UiLanguage language);
 
     bool HasSelection() const;
     TagEntry SelectedTag() const;
 
 private:
+    wxString L(const char* de, const char* en) const;
+    bool Matches(const TagEntry& tag, const wxString& filter) const;
     void RebuildList();
     void OnFilter(wxCommandEvent& event);
     void OnActivate(wxListEvent& event);
     void OnChoose(wxCommandEvent& event);
-    bool Matches(const TagEntry& tag, const wxString& filter) const;
 
+    UiLanguage language_;
     wxTextCtrl* filter_{};
     wxListCtrl* list_{};
     wxStaticText* count_{};
     std::vector<TagEntry> allTags_;
     std::vector<std::size_t> visible_;
-    bool hasSelection_{};
-    TagEntry selected_;
+    TagEntry selected_{};
+    bool hasSelection_{false};
 };
