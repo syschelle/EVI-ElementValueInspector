@@ -181,7 +181,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.11"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.12"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -368,7 +368,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.11"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.12"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -761,8 +761,51 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
     hitList_->DeleteAllItems();
     if (!result_) { hitList_->Thaw(); return; }
 
+    std::vector<const ScanHit*> sortedHits;
+    sortedHits.reserve(result_->hits.size());
     for (const auto& h : result_->hits) {
         if (!seriesKey.empty() && h.seriesKey != seriesKey) continue;
+        sortedHits.push_back(&h);
+    }
+
+    const auto parseDicomInteger = [](const std::string& value, long long& parsed) {
+        const auto first = value.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) return false;
+        const auto last = value.find_last_not_of(" \t\r\n");
+        const std::string trimmed = value.substr(first, last - first + 1);
+
+        std::size_t pos = 0;
+        try {
+            parsed = std::stoll(trimmed, &pos, 10);
+        } catch (...) {
+            return false;
+        }
+        return pos == trimmed.size();
+    };
+
+    const auto numericLess = [&](const std::string& left, const std::string& right) {
+        long long l = 0;
+        long long r = 0;
+        const bool leftNumeric = parseDicomInteger(left, l);
+        const bool rightNumeric = parseDicomInteger(right, r);
+
+        if (leftNumeric && rightNumeric && l != r) return l < r;
+        if (leftNumeric != rightNumeric) return leftNumeric;
+        return left < right;
+    };
+
+    std::stable_sort(sortedHits.begin(), sortedHits.end(), [&](const ScanHit* a, const ScanHit* b) {
+        if (a->seriesNumber != b->seriesNumber) {
+            return numericLess(a->seriesNumber, b->seriesNumber);
+        }
+        if (a->instanceNumber != b->instanceNumber) {
+            return numericLess(a->instanceNumber, b->instanceNumber);
+        }
+        return a->relativeFile < b->relativeFile;
+    });
+
+    for (const auto* hit : sortedHits) {
+        const auto& h = *hit;
         const long row = hitList_->InsertItem(hitList_->GetItemCount(), W(h.seriesNumber));
         hitList_->SetItem(row, 1, W(h.instanceNumber));
         hitList_->SetItem(row, 2, W(h.modality));
