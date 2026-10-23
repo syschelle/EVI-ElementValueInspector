@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Models.h"
+#include "UiLanguage.h"
 
 #include <dcmtk/dcmdata/dctk.h>
 #include <filesystem>
@@ -10,11 +11,11 @@
 
 namespace DicomUtils {
 
-std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error);
+std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error, UiLanguage language = UiLanguage::German);
 std::string FormatTag(const DcmTagKey& key);
 std::string TagName(const DcmTagKey& key);
 std::string GetString(DcmItem* item, const DcmTagKey& key);
-std::string SafeElementValue(DcmObject* object);
+std::string SafeElementValue(DcmObject* object, UiLanguage language = UiLanguage::German);
 std::string SequencePath(const DcmStack& stack, const std::string& prefix = {});
 std::vector<TagEntry> LoadDictionary();
 std::string ToUtf8Path(const std::filesystem::path& path);

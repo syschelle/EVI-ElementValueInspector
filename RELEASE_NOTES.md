@@ -1,14 +1,16 @@
-# ElementValueInspector (EVI) v0.2.7
+# ElementValueInspector (EVI) v0.2.8
 
 ## Changes
 
-- Fixed first-time GitHub release publishing in `publish_release.ps1`.
-- A missing release is now treated as the expected state and no longer aborts the script with `NativeCommandError`.
-- Release existence is checked via the GitHub CLI exit code without exposing the expected `release not found` stderr message to PowerShell.
-- Existing releases are still updated with `--clobber`.
-- New releases still upload both `dist/evi.exe` and `dist/evi.exe.sha256`.
-- Corrected the Windows executable numeric file/product version to `0.2.7.0`.
-- DICOM inspection functionality is unchanged.
+- Added selectable **German and English user interface languages**.
+- Added a language selector to the main window; the interface can be switched without restarting EVI.
+- Localized buttons, section headings, table columns, scan status messages, dialogs, errors, and CSV export dialogs.
+- The DICOM tag selection dialog now follows the currently selected UI language.
+- Redesigned the main window for a cleaner, more modern Windows desktop appearance.
+- Reduced the large study/patient information area to a compact two-row information card.
+- Long study values such as the Study Instance UID are ellipsized in the UI and remain available through a tooltip.
+- Increased the usable vertical area for the series overview and match/instance table.
+- Kept all existing DICOM scanning, nested-sequence search, CSV export, portable EXE, SHA-256, and GitHub release functionality.
 
 ## Release assets
 
@@ -16,16 +18,3 @@
 dist\evi.exe
 dist\evi.exe.sha256
 ```
-
-## Publish
-
-After building, committing and pushing the source code:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\publish_release.ps1
-```
-
-The script now handles both cases automatically:
-
-- `v0.2.7` does not exist → create the release and upload both assets.
-- `v0.2.7` already exists → replace/update both assets.

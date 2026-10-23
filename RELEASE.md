@@ -1,10 +1,20 @@
-# EVI – ElementValueInspector v0.2.7
+# EVI – ElementValueInspector v0.2.8
 
 ## Native Windows DICOM Element Inspector
 
-EVI (ElementValueInspector) is a native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements across studies, series, instances, and nested sequences.
+EVI (ElementValueInspector) is a portable native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements across studies, series, instances, and nested sequences.
 
-## Highlights
+## New in v0.2.8
+
+- Modernized and more compact main window.
+- Compact two-row study/patient information panel with more room for result tables.
+- Selectable **Deutsch / English** user interface.
+- Language switching without restarting the application.
+- Localized controls, table headers, scan status, dialogs, and errors.
+- DICOM tag selection dialog follows the selected language.
+- Long study values are displayed compactly with the complete value available as a tooltip.
+
+## Core features
 
 - Native C++20 Windows application
 - Single portable `evi.exe`
@@ -13,7 +23,7 @@ EVI (ElementValueInspector) is a native Windows application for inspecting compl
 - wxWidgets 3.2.12 based Windows user interface
 - Recursive scanning of complete DICOM study folders
 - Automatic study, series, and instance detection
-- Search by manually entered DICOM tag
+- Manual DICOM tag entry
 - Searchable selection from the built-in DICOM dictionary
 - Recursive search inside nested DICOM sequences
 - File Meta Information search
@@ -23,21 +33,12 @@ EVI (ElementValueInspector) is a native Windows application for inspecting compl
 - Built-in DICOM dictionary; no external `dicom.dic` required
 - Static Windows runtime and libraries for a portable executable
 
-## New in v0.2.7
-
-- Fixed first-time publishing with `publish_release.ps1`.
-- A missing GitHub release is now correctly detected and created instead of terminating with `NativeCommandError`.
-- Existing releases can still be updated with the EXE and SHA-256 checksum.
-- Windows file/product version updated to `0.2.7.0`.
-
 ## Release assets
 
 - `evi.exe` – portable Windows x64 application
-- `evi.exe.sha256` – SHA-256 checksum for verifying the executable
+- `evi.exe.sha256` – SHA-256 checksum
 
 ## Verify the download
-
-In PowerShell:
 
 ```powershell
 Get-FileHash .\evi.exe -Algorithm SHA256
@@ -45,17 +46,6 @@ Get-Content .\evi.exe.sha256
 ```
 
 The hash values must match.
-
-## Build environment
-
-The Windows build is intended for:
-
-- Microsoft Visual Studio 2022 Build Tools
-- Windows SDK
-- CMake
-- C++20
-- DCMTK 3.7.0
-- wxWidgets 3.2.12
 
 ## Build
 

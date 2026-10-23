@@ -51,10 +51,10 @@ std::string FormatDictionaryTag(const DcmDictEntry& entry) {
 
 namespace DicomUtils {
 
-std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error) {
+std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error, UiLanguage language) {
     std::string text = Trim(input);
     if (text.empty()) {
-        error = "Bitte einen DICOM-Tag eingeben oder auswaehlen.";
+        error = language == UiLanguage::German ? "Bitte einen DICOM-Tag eingeben oder auswählen." : "Please enter or select a DICOM tag.";
         return std::nullopt;
     }
 
@@ -76,7 +76,7 @@ std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error) 
             const auto element = static_cast<Uint16>(std::stoul(text.substr(4, 4), nullptr, 16));
             return DcmTagKey(group, element);
         } catch (...) {
-            error = "Der DICOM-Tag konnte nicht gelesen werden.";
+            error = language == UiLanguage::German ? "Der DICOM-Tag konnte nicht gelesen werden." : "The DICOM tag could not be parsed.";
             return std::nullopt;
         }
     }
@@ -89,7 +89,7 @@ std::optional<DcmTagKey> ParseTag(const std::string& input, std::string& error) 
         return tag.getTagKey();
     }
 
-    error = "Unbekannter DICOM-Tag. Beispiele: (0018,1030), 00181030 oder ProtocolName.";
+    error = language == UiLanguage::German ? "Unbekannter DICOM-Tag. Beispiele: (0018,1030), 00181030 oder ProtocolName." : "Unknown DICOM tag. Examples: (0018,1030), 00181030 or ProtocolName.";
     return std::nullopt;
 }
 
@@ -115,19 +115,19 @@ std::string GetString(DcmItem* item, const DcmTagKey& key) {
     return {};
 }
 
-std::string SafeElementValue(DcmObject* object) {
+std::string SafeElementValue(DcmObject* object, UiLanguage language) {
     if (!object) return {};
 
     const DcmTagKey key = object->getTag().getTagKey();
     if (key == DCM_PixelData) {
         std::ostringstream out;
-        out << "<PixelData ausgelassen: " << object->getLength() << " Bytes>";
+        out << (language == UiLanguage::German ? "<PixelData ausgelassen: " : "<Pixel Data omitted: ") << object->getLength() << " Bytes>";
         return out.str();
     }
 
     if (auto* sequence = dynamic_cast<DcmSequenceOfItems*>(object)) {
         std::ostringstream out;
-        out << "<Sequence: " << sequence->card() << " Item(s)>";
+        out << (language == UiLanguage::German ? "<Sequenz: " : "<Sequence: ") << sequence->card() << " Item(s)>";
         return out.str();
     }
 
@@ -137,7 +137,7 @@ std::string SafeElementValue(DcmObject* object) {
     constexpr Uint32 kMaxDisplayValue = 1024 * 1024;
     if (element->getLength() > kMaxDisplayValue) {
         std::ostringstream out;
-        out << "<Wert ausgelassen: " << element->getLength() << " Bytes>";
+        out << (language == UiLanguage::German ? "<Wert ausgelassen: " : "<Value omitted: ") << element->getLength() << " Bytes>";
         return out.str();
     }
 
