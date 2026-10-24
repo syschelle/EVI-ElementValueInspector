@@ -85,8 +85,9 @@ The header inspector:
 
 - loads the selected instance independently of the study search
 - displays File Meta Information and the recursively traversed dataset
-- shows tag number, tag name, VR, value, and sequence path
-- automatically selects and scrolls to the element that opened the window
+- presents DICOM sequences as expandable groups instead of mixing all nested elements into one flat list
+- nests sequence contents below the corresponding `SQ` element while preserving tag, name, VR, value, and sequence-path columns
+- automatically expands the required sequence groups, selects, and scrolls to the element that opened the window
 - keeps the original study search and result set unchanged
 
 The header window has its own search field. It can locate elements by:

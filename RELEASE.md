@@ -1,13 +1,17 @@
-# EVI v0.2.14
+# EVI v0.2.15
 
-## Header Inspector build fix
+## Grouped sequences in the DICOM Header Inspector
 
-This release fixes a Windows/MSVC compile error introduced with the per-instance DICOM Header Inspector.
+The per-instance DICOM Header Inspector now presents nested DICOM sequences as real expandable groups instead of displaying all elements in one flat list.
 
-### Fixed
+### Improved
 
-- Renamed the internal Header Inspector string-lowercasing helper to avoid a name collision with `wxWindow::Lower()`.
-- Restored successful compilation of `HeaderFrame.cpp` with wxWidgets on Windows.
-- The per-instance Header Inspector, automatic jump to the originating DICOM element, and its independent local tag search remain unchanged.
+- `SQ` elements are shown as expandable sequence nodes.
+- Elements contained in a sequence are displayed directly below their parent sequence.
+- Nested sequences are grouped recursively below their corresponding parent sequence.
+- Dataset and File Meta Information are shown as separate top-level sections.
+- Sequence groups remain collapsed by default for a cleaner overview.
+- Opening an instance from a study-search result still jumps to the originating DICOM element and now automatically expands all required parent sequences.
+- Header-local search continues to be independent of the main study search and automatically expands the hierarchy when a match is selected.
 
-No DICOM search behavior or study results are changed by this release.
+No behavior of the initial study search is changed by this release.

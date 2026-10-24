@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <wx/frame.h>
-#include <wx/listctrl.h>
+#include <wx/treelist.h>
 
 class DcmItem;
 class wxButton;
@@ -34,17 +34,19 @@ private:
         std::string vr;
         std::string value;
         std::string sequencePath;
+        bool fileMeta{};
+        bool sequence{};
     };
 
     wxString L(const wchar_t* de, const wchar_t* en) const;
     void BuildUi();
     void ApplyTheme();
     void LoadHeader();
-    void CollectRows(DcmItem* container, const std::string& prefix);
-    void PopulateList();
+    void CollectRows(DcmItem* container, const std::string& prefix, bool fileMeta);
+    void PopulateTree();
     void SelectInitialMatch();
     void RunSearch(bool advance);
-    void SelectRow(long row);
+    void SelectRow(std::size_t row);
     bool RowMatchesSearch(const HeaderRow& row, const wxString& query) const;
     void UpdateSearchStatus();
 
@@ -69,10 +71,11 @@ private:
     wxTextCtrl* search_{};
     wxButton* findNext_{};
     wxStaticText* hint_{};
-    wxListCtrl* list_{};
+    wxTreeListCtrl* tree_{};
     wxStaticText* status_{};
 
     std::vector<HeaderRow> rows_;
+    std::vector<wxTreeListItem> rowItems_;
     std::vector<std::size_t> searchMatches_;
     std::size_t searchPosition_{};
     wxString lastQuery_;
