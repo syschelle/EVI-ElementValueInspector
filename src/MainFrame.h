@@ -54,6 +54,7 @@ private:
     void OnLanguageChanged(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
     void OnSeriesSelected(wxListEvent& event);
+    void OnHitActivated(wxListEvent& event);
     void OnProgress(wxThreadEvent& event);
     void OnComplete(wxThreadEvent& event);
     void OnScanError(wxThreadEvent& event);
@@ -118,4 +119,5 @@ private:
     std::thread worker_;
     std::shared_ptr<ScanResult> result_;
     std::vector<std::string> visibleSeriesKeys_;
+    std::vector<std::size_t> visibleHitIndices_;
 };

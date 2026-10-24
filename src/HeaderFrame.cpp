@@ -1,0 +1,353 @@
+#include "HeaderFrame.h"
+#include "DicomUtils.h"
+
+#include <dcmtk/dcmdata/dcfilefo.h>
+#include <dcmtk/dcmdata/dcelem.h>
+#include <dcmtk/dcmdata/dcvr.h>
+#include <dcmtk/dcmdata/dcitem.h>
+#include <dcmtk/dcmdata/dcmetinf.h>
+
+#include <wx/button.h>
+#include <wx/font.h>
+#include <wx/msgdlg.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/textctrl.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
+#endif
+
+#include <algorithm>
+#include <stdexcept>
+
+namespace {
+
+wxString W(const std::string& text) {
+    return wxString::FromUTF8(text.c_str());
+}
+
+std::string U8(const wxString& text) {
+    const wxScopedCharBuffer buffer = text.ToUTF8();
+    return buffer.data() ? std::string(buffer.data()) : std::string{};
+}
+
+wxString LowerText(wxString text) {
+    text.MakeLower();
+    return text;
+}
+
+#ifdef _WIN32
+void ApplyNativeDarkMode(wxWindow* window, bool dark) {
+    if (!window || !window->GetHandle()) return;
+    HWND hwnd = reinterpret_cast<HWND>(window->GetHandle());
+    const BOOL value = dark ? TRUE : FALSE;
+    constexpr DWORD kImmersiveDarkMode = 20;
+    DwmSetWindowAttribute(hwnd, kImmersiveDarkMode, &value, sizeof(value));
+}
+#endif
+
+} // namespace
+
+HeaderFrame::HeaderFrame(wxWindow* parent,
+                         const ScanHit& sourceHit,
+                         UiLanguage language,
+                         UiTheme theme)
+    : wxFrame(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(1320, 820),
+              wxDEFAULT_FRAME_STYLE | wxCLIP_CHILDREN),
+      language_(language),
+      theme_(theme),
+      filePath_(std::filesystem::path(W(sourceHit.fullFile).ToStdWstring())),
+      initialTag_(sourceHit.tag),
+      initialValue_(sourceHit.value),
+      initialSequencePath_(sourceHit.sequencePath),
+      seriesNumber_(sourceHit.seriesNumber),
+      instanceNumber_(sourceHit.instanceNumber),
+      modality_(sourceHit.modality)
+{
+    SetMinSize(wxSize(900, 580));
+    SetFont(wxFont(wxFontInfo(10).FaceName(wxString(L"Segoe UI"))));
+    BuildUi();
+    LoadHeader();
+    PopulateList();
+    ApplyTheme();
+    CentreOnParent();
+
+    CallAfter([this]() {
+        SelectInitialMatch();
+        search_->SetFocus();
+    });
+}
+
+wxString HeaderFrame::L(const wchar_t* de, const wchar_t* en) const {
+    return wxString(language_ == UiLanguage::German ? de : en);
+}
+
+void HeaderFrame::BuildUi() {
+    SetTitle(L(L"DICOM-Header – ElementValueInspector", L"DICOM Header – ElementValueInspector"));
+
+    rootPanel_ = new wxPanel(this);
+    auto* rootPanel = rootPanel_;
+    auto* root = new wxBoxSizer(wxVERTICAL);
+
+    title_ = new wxStaticText(rootPanel, wxID_ANY, L(L"DICOM-Header", L"DICOM Header"));
+    wxFont titleFont = title_->GetFont();
+    titleFont.SetPointSize(titleFont.GetPointSize() + 5);
+    titleFont.MakeBold();
+    title_->SetFont(titleFont);
+    root->Add(title_, 0, wxLEFT | wxRIGHT | wxTOP, 18);
+
+    const wxString series = seriesNumber_.empty() ? wxString(L"-") : W(seriesNumber_);
+    const wxString instance = instanceNumber_.empty() ? wxString(L"-") : W(instanceNumber_);
+    const wxString modality = modality_.empty() ? wxString(L"-") : W(modality_);
+    context_ = new wxStaticText(rootPanel, wxID_ANY,
+        wxString::Format(L(L"Serie %s · Instanz %s · %s", L"Series %s · Instance %s · %s"),
+                         series.c_str(), instance.c_str(), modality.c_str()));
+    root->Add(context_, 0, wxLEFT | wxRIGHT | wxTOP, 18);
+
+    file_ = new wxStaticText(rootPanel, wxID_ANY, wxString(filePath_.wstring()), wxDefaultPosition,
+                             wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+    file_->SetToolTip(wxString(filePath_.wstring()));
+    root->Add(file_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
+
+    auto* searchRow = new wxBoxSizer(wxHORIZONTAL);
+    searchLabel_ = new wxStaticText(rootPanel, wxID_ANY, L(L"Im Header suchen", L"Search header"));
+    search_ = new wxTextCtrl(rootPanel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+                             wxTE_PROCESS_ENTER);
+    search_->SetHint(L(L"Tagnummer, Tagname, VR, Wert oder Sequence-Pfad",
+                       L"Tag number, tag name, VR, value or sequence path"));
+    findNext_ = new wxButton(rootPanel, wxID_ANY, L(L"Weiter", L"Find next"));
+    findNext_->SetMinSize(wxSize(110, 32));
+    searchRow->Add(searchLabel_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    searchRow->Add(search_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    searchRow->Add(findNext_, 0, wxALIGN_CENTER_VERTICAL);
+    root->Add(searchRow, 0, wxEXPAND | wxLEFT | wxRIGHT, 18);
+
+    hint_ = new wxStaticText(rootPanel, wxID_ANY,
+        L(L"Diese Suche gilt nur für dieses Header-Fenster und verändert die ursprüngliche Studiensuche nicht.",
+          L"This search applies only to this header window and never changes the original study search."));
+    root->Add(hint_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
+
+    list_ = new wxListCtrl(rootPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxLC_REPORT | wxLC_SINGLE_SEL);
+    list_->AppendColumn(wxString(L"Tag"), wxLIST_FORMAT_LEFT, 115);
+    list_->AppendColumn(L(L"Name", L"Name"), wxLIST_FORMAT_LEFT, 255);
+    list_->AppendColumn(wxString(L"VR"), wxLIST_FORMAT_LEFT, 55);
+    list_->AppendColumn(L(L"Wert", L"Value"), wxLIST_FORMAT_LEFT, 480);
+    list_->AppendColumn(L(L"Sequence-Pfad", L"Sequence path"), wxLIST_FORMAT_LEFT, 360);
+    root->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT, 18);
+
+    status_ = new wxStaticText(rootPanel, wxID_ANY, wxEmptyString);
+    root->Add(status_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
+
+    rootPanel->SetSizer(root);
+
+    search_->Bind(wxEVT_TEXT_ENTER, &HeaderFrame::OnSearch, this);
+    findNext_->Bind(wxEVT_BUTTON, &HeaderFrame::OnFindNext, this);
+}
+
+void HeaderFrame::LoadHeader() {
+    DcmFileFormat dcm;
+    // Read metadata values up to 1 MiB directly. Larger binary values and Pixel Data
+    // remain deferred/omitted by SafeElementValue().
+    OFCondition status = DicomUtils::LoadDicomFile(dcm, filePath_, 1024U * 1024U);
+    if (status.bad()) {
+        throw std::runtime_error(status.text());
+    }
+
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+    dcm.convertToUTF8();
+#endif
+
+    // Dataset first mirrors the main scanner traversal and improves exact jump matching.
+    CollectRows(dcm.getDataset(), {});
+    CollectRows(dcm.getMetaInfo(), language_ == UiLanguage::German
+        ? "Datei-Metainformationen"
+        : "File Meta Information");
+}
+
+void HeaderFrame::CollectRows(DcmItem* container, const std::string& prefix) {
+    if (!container) return;
+
+    DcmStack stack;
+    while (container->nextObject(stack, OFTrue).good()) {
+        DcmObject* object = stack.top();
+        if (!object) continue;
+
+        // Items are traversal containers rather than DICOM data elements.
+        if (dynamic_cast<DcmElement*>(object) == nullptr) continue;
+
+        const DcmTagKey key = object->getTag().getTagKey();
+        HeaderRow row;
+        row.group = key.getGroup();
+        row.element = key.getElement();
+        row.tag = DicomUtils::FormatTag(key);
+        row.name = DicomUtils::TagName(key);
+        row.vr = DcmVR(object->getVR()).getVRName();
+        row.value = DicomUtils::SafeElementValue(object, language_);
+        row.sequencePath = DicomUtils::SequencePath(stack, prefix);
+        rows_.push_back(std::move(row));
+    }
+}
+
+void HeaderFrame::PopulateList() {
+    list_->Freeze();
+    list_->DeleteAllItems();
+    for (const auto& row : rows_) {
+        const long item = list_->InsertItem(list_->GetItemCount(), W(row.tag));
+        list_->SetItem(item, 1, W(row.name));
+        list_->SetItem(item, 2, W(row.vr));
+        list_->SetItem(item, 3, W(row.value));
+        list_->SetItem(item, 4, W(row.sequencePath));
+    }
+    list_->Thaw();
+
+    status_->SetLabel(language_ == UiLanguage::German
+        ? wxString::Format(L"%zu DICOM-Elemente geladen", rows_.size())
+        : wxString::Format(L"%zu DICOM elements loaded", rows_.size()));
+}
+
+void HeaderFrame::SelectInitialMatch() {
+    if (rows_.empty()) return;
+
+    long fallback = -1;
+    long valueFallback = -1;
+    long pathFallback = -1;
+    long exact = -1;
+
+    for (std::size_t i = 0; i < rows_.size(); ++i) {
+        const auto& row = rows_[i];
+        if (row.tag != initialTag_) continue;
+        if (fallback < 0) fallback = static_cast<long>(i);
+        if (valueFallback < 0 && row.value == initialValue_) valueFallback = static_cast<long>(i);
+        if (pathFallback < 0 && row.sequencePath == initialSequencePath_) pathFallback = static_cast<long>(i);
+        if (row.value == initialValue_ && row.sequencePath == initialSequencePath_) {
+            exact = static_cast<long>(i);
+            break;
+        }
+    }
+
+    const long row = exact >= 0 ? exact : (pathFallback >= 0 ? pathFallback : (valueFallback >= 0 ? valueFallback : fallback));
+    if (row >= 0) SelectRow(row);
+}
+
+bool HeaderFrame::RowMatchesSearch(const HeaderRow& row, const wxString& query) const {
+    wxString trimmed = query;
+    trimmed.Trim(true).Trim(false);
+    if (trimmed.empty()) return false;
+
+    std::string parseError;
+    if (const auto tag = DicomUtils::ParseTag(U8(trimmed), parseError, language_)) {
+        return row.group == tag->getGroup() && row.element == tag->getElement();
+    }
+
+    const wxString needle = LowerText(trimmed);
+    wxString haystack = W(row.tag + " " + row.name + " " + row.vr + " " + row.value + " " + row.sequencePath);
+    haystack.MakeLower();
+    return haystack.Find(needle) != wxNOT_FOUND;
+}
+
+void HeaderFrame::RunSearch(bool advance) {
+    wxString query = search_->GetValue();
+    query.Trim(true).Trim(false);
+    if (query.empty()) {
+        searchMatches_.clear();
+        lastQuery_.clear();
+        UpdateSearchStatus();
+        return;
+    }
+
+    const bool queryChanged = query != lastQuery_;
+    if (queryChanged) {
+        lastQuery_ = query;
+        searchMatches_.clear();
+        for (std::size_t i = 0; i < rows_.size(); ++i) {
+            if (RowMatchesSearch(rows_[i], query)) searchMatches_.push_back(i);
+        }
+        searchPosition_ = 0;
+    } else if (advance && !searchMatches_.empty()) {
+        searchPosition_ = (searchPosition_ + 1) % searchMatches_.size();
+    }
+
+    if (!searchMatches_.empty()) {
+        SelectRow(static_cast<long>(searchMatches_[searchPosition_]));
+    }
+    UpdateSearchStatus();
+}
+
+void HeaderFrame::SelectRow(long row) {
+    if (row < 0 || row >= list_->GetItemCount()) return;
+
+    const long selected = list_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (selected >= 0) {
+        list_->SetItemState(selected, 0, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+    }
+    list_->SetItemState(row, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                        wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+    list_->EnsureVisible(row);
+}
+
+void HeaderFrame::UpdateSearchStatus() {
+    if (lastQuery_.empty()) {
+        status_->SetLabel(language_ == UiLanguage::German
+            ? wxString::Format(L"%zu DICOM-Elemente geladen", rows_.size())
+            : wxString::Format(L"%zu DICOM elements loaded", rows_.size()));
+        return;
+    }
+
+    if (searchMatches_.empty()) {
+        status_->SetLabel(L(L"Keine passenden Header-Elemente gefunden.", L"No matching header elements found."));
+        return;
+    }
+
+    status_->SetLabel(language_ == UiLanguage::German
+        ? wxString::Format(L"Treffer %zu von %zu", searchPosition_ + 1, searchMatches_.size())
+        : wxString::Format(L"Match %zu of %zu", searchPosition_ + 1, searchMatches_.size()));
+}
+
+void HeaderFrame::OnSearch(wxCommandEvent&) {
+    RunSearch(true);
+}
+
+void HeaderFrame::OnFindNext(wxCommandEvent&) {
+    RunSearch(true);
+}
+
+void HeaderFrame::ApplyTheme() {
+    const bool dark = theme_ == UiTheme::Dark;
+    const wxColour background = dark ? wxColour(24, 27, 32) : wxColour(244, 246, 249);
+    const wxColour table = dark ? wxColour(28, 32, 38) : wxColour(255, 255, 255);
+    const wxColour alternate = dark ? wxColour(34, 39, 46) : wxColour(248, 250, 252);
+    const wxColour input = dark ? wxColour(42, 47, 55) : wxColour(255, 255, 255);
+    const wxColour text = dark ? wxColour(235, 238, 242) : wxColour(30, 35, 42);
+    const wxColour muted = dark ? wxColour(164, 173, 184) : wxColour(100, 109, 120);
+
+    SetBackgroundColour(background);
+    if (rootPanel_) rootPanel_->SetBackgroundColour(background);
+    title_->SetForegroundColour(text);
+    context_->SetForegroundColour(text);
+    file_->SetForegroundColour(muted);
+    searchLabel_->SetForegroundColour(text);
+    hint_->SetForegroundColour(muted);
+    status_->SetForegroundColour(muted);
+    search_->SetBackgroundColour(input);
+    search_->SetForegroundColour(text);
+    list_->SetBackgroundColour(table);
+    list_->SetForegroundColour(text);
+
+    for (long row = 0; row < list_->GetItemCount(); ++row) {
+        list_->SetItemBackgroundColour(row, (row % 2) ? alternate : table);
+        list_->SetItemTextColour(row, text);
+    }
+
+#ifdef _WIN32
+    if (list_->GetHandle()) {
+        SetWindowTheme(reinterpret_cast<HWND>(list_->GetHandle()), dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    }
+    ApplyNativeDarkMode(this, dark);
+#endif
+    Refresh();
+}

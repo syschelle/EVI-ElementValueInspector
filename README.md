@@ -77,6 +77,30 @@ Each matching DICOM element is shown together with its instance and series conte
 
 Selecting a series filters the match list to that series. **Show all** restores the complete result set.
 
+## Per-instance DICOM header inspector
+
+Double-click any row in **Matches and instances** to open the complete metadata header of that exact DICOM instance in a separate window.
+
+The header inspector:
+
+- loads the selected instance independently of the study search
+- displays File Meta Information and the recursively traversed dataset
+- shows tag number, tag name, VR, value, and sequence path
+- automatically selects and scrolls to the element that opened the window
+- keeps the original study search and result set unchanged
+
+The header window has its own search field. It can locate elements by:
+
+- exact tag number, for example `(0008,1030)`
+- DICOM keyword/name, for example `StudyDescription`
+- VR
+- displayed value
+- sequence path
+
+Repeated **Find next** actions cycle through all matches inside the current instance. This secondary search is local to the header window and never replaces or modifies the tag used for the main study scan.
+
+Large binary values and Pixel Data remain omitted from textual display so that the inspector stays responsive on large imaging objects.
+
 ## Nested sequences and file meta information
 
 The dataset traversal is recursive. EVI can therefore locate the requested tag inside nested DICOM sequences instead of searching only the dataset root.

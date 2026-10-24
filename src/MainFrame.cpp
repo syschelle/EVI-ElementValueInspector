@@ -1,6 +1,7 @@
 #include "MainFrame.h"
 #include "DicomScanner.h"
 #include "DicomUtils.h"
+#include "HeaderFrame.h"
 #include "TagDialog.h"
 
 #include <wx/button.h>
@@ -181,7 +182,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.12"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.14"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -354,6 +355,7 @@ void MainFrame::BindEvents() {
     tag_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     folder_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     seriesList_->Bind(wxEVT_LIST_ITEM_SELECTED, &MainFrame::OnSeriesSelected, this);
+    hitList_->Bind(wxEVT_LIST_ITEM_ACTIVATED, &MainFrame::OnHitActivated, this);
     Bind(EVT_SCAN_PROGRESS, &MainFrame::OnProgress, this);
     Bind(EVT_SCAN_COMPLETE, &MainFrame::OnComplete, this);
     Bind(EVT_SCAN_ERROR, &MainFrame::OnScanError, this);
@@ -368,7 +370,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.12"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.14"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -426,6 +428,10 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(hitList_, 7, L(L"Sequence-Pfad", L"Sequence path"));
     SetColumnTitle(hitList_, 8, L(L"Datei", L"File"));
     SetColumnTitle(hitList_, 9, wxString(L"SOP Instance UID"));
+
+    hitList_->SetToolTip(L(
+        L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
+        L"Double-click a match to open the complete DICOM header for that instance."));
 
     if (result_) UpdateStatusSummary();
     else status_->SetLabel(L(L"Bereit.", L"Ready."));
@@ -759,13 +765,15 @@ void MainFrame::PopulateSeries() {
 void MainFrame::PopulateHits(const std::string& seriesKey) {
     hitList_->Freeze();
     hitList_->DeleteAllItems();
+    visibleHitIndices_.clear();
     if (!result_) { hitList_->Thaw(); return; }
 
-    std::vector<const ScanHit*> sortedHits;
+    std::vector<std::size_t> sortedHits;
     sortedHits.reserve(result_->hits.size());
-    for (const auto& h : result_->hits) {
+    for (std::size_t index = 0; index < result_->hits.size(); ++index) {
+        const auto& h = result_->hits[index];
         if (!seriesKey.empty() && h.seriesKey != seriesKey) continue;
-        sortedHits.push_back(&h);
+        sortedHits.push_back(index);
     }
 
     const auto parseDicomInteger = [](const std::string& value, long long& parsed) {
@@ -794,18 +802,20 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         return left < right;
     };
 
-    std::stable_sort(sortedHits.begin(), sortedHits.end(), [&](const ScanHit* a, const ScanHit* b) {
-        if (a->seriesNumber != b->seriesNumber) {
-            return numericLess(a->seriesNumber, b->seriesNumber);
+    std::stable_sort(sortedHits.begin(), sortedHits.end(), [&](std::size_t leftIndex, std::size_t rightIndex) {
+        const auto& a = result_->hits[leftIndex];
+        const auto& b = result_->hits[rightIndex];
+        if (a.seriesNumber != b.seriesNumber) {
+            return numericLess(a.seriesNumber, b.seriesNumber);
         }
-        if (a->instanceNumber != b->instanceNumber) {
-            return numericLess(a->instanceNumber, b->instanceNumber);
+        if (a.instanceNumber != b.instanceNumber) {
+            return numericLess(a.instanceNumber, b.instanceNumber);
         }
-        return a->relativeFile < b->relativeFile;
+        return a.relativeFile < b.relativeFile;
     });
 
-    for (const auto* hit : sortedHits) {
-        const auto& h = *hit;
+    for (const auto hitIndex : sortedHits) {
+        const auto& h = result_->hits[hitIndex];
         const long row = hitList_->InsertItem(hitList_->GetItemCount(), W(h.seriesNumber));
         hitList_->SetItem(row, 1, W(h.instanceNumber));
         hitList_->SetItem(row, 2, W(h.modality));
@@ -816,6 +826,7 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         hitList_->SetItem(row, 7, W(h.sequencePath));
         hitList_->SetItem(row, 8, W(h.relativeFile));
         hitList_->SetItem(row, 9, W(h.sopInstanceUid));
+        visibleHitIndices_.push_back(hitIndex);
     }
     ApplyListRowTheme(hitList_);
     hitList_->Thaw();
@@ -825,6 +836,23 @@ void MainFrame::OnSeriesSelected(wxListEvent& event) {
     const long row = event.GetIndex();
     if (row >= 0 && static_cast<std::size_t>(row) < visibleSeriesKeys_.size()) {
         PopulateHits(visibleSeriesKeys_[static_cast<std::size_t>(row)]);
+    }
+}
+
+void MainFrame::OnHitActivated(wxListEvent& event) {
+    const long row = event.GetIndex();
+    if (!result_ || row < 0 || static_cast<std::size_t>(row) >= visibleHitIndices_.size()) return;
+
+    const auto hitIndex = visibleHitIndices_[static_cast<std::size_t>(row)];
+    if (hitIndex >= result_->hits.size()) return;
+
+    try {
+        auto* header = new HeaderFrame(this, result_->hits[hitIndex], language_, theme_);
+        header->Show();
+    } catch (const std::exception& ex) {
+        wxMessageBox(W(ex.what()),
+                     L(L"DICOM-Header konnte nicht geöffnet werden", L"Could not open DICOM header"),
+                     wxOK | wxICON_ERROR, this);
     }
 }
 

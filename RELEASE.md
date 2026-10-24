@@ -1,19 +1,13 @@
-# EVI – ElementValueInspector v0.2.12
+# EVI v0.2.14
 
-## DICOM instance sorting fix
+## Header Inspector build fix
 
-EVI v0.2.12 corrects the ordering of matches in the **Matches / Instances** table.
+This release fixes a Windows/MSVC compile error introduced with the per-instance DICOM Header Inspector.
 
 ### Fixed
 
-- **Instance Number** is now sorted numerically rather than by scan/file order.
-- When all series are displayed, results are ordered by **Series Number** and then by **Instance Number**.
-- Numeric values are ordered naturally, for example: `1, 2, 3, 4, 10, 11, 12`.
-- Missing or non-numeric values remain supported and are placed after numeric values in a stable order.
+- Renamed the internal Header Inspector string-lowercasing helper to avoid a name collision with `wxWindow::Lower()`.
+- Restored successful compilation of `HeaderFrame.cpp` with wxWidgets on Windows.
+- The per-instance Header Inspector, automatic jump to the originating DICOM element, and its independent local tag search remain unchanged.
 
-### Windows binary
-
-The GitHub release provides:
-
-- `evi.exe`
-- `evi.exe.sha256`
+No DICOM search behavior or study results are changed by this release.
