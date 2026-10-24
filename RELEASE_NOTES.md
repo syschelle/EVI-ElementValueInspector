@@ -1,13 +1,13 @@
-# EVI v0.2.16 Release Notes
+# EVI v0.2.17 Release Notes
 
-## Added
+## Changed
 
-- Added the supplied gold EVI artwork as the native Windows application icon.
-- Added a multi-resolution ICO resource for crisp rendering at common Windows icon sizes.
-- Applied the embedded icon to the main application window and the DICOM Header Inspector.
-- Embedded the icon directly in `evi.exe` for Explorer, taskbar and Alt+Tab integration.
+- Replaced the previous EVI application icon with the new transparent gold EVI logo.
+- Preserved the transparent background in the embedded Windows icon resource.
+- Regenerated all common icon sizes for Explorer, taskbar, Alt+Tab and top-level EVI windows.
 
 ## Packaging
 
-- No external icon file is required by the released executable.
+- The icon remains compiled directly into `evi.exe`.
+- No external icon or image file is required by the released application.
 - The portable release remains a single `evi.exe` plus the separately published SHA-256 checksum file.

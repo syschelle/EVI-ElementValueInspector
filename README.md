@@ -235,4 +235,4 @@ Build output directories such as `build/`, `.build/`, and executable release art
 
 ## Windows application identity
 
-EVI is distributed as a native Windows executable with an embedded multi-resolution application icon. The same EVI icon is used by the executable, the main application window, the DICOM Header Inspector, the Windows taskbar, and Alt+Tab. No external icon file is required at runtime.
+EVI is distributed as a native Windows executable with an embedded multi-resolution application icon using the transparent gold EVI logo. Alpha transparency is preserved in the Windows icon resource. The same icon is used by the executable, the main application window, the DICOM Header Inspector, the Windows taskbar, and Alt+Tab. No external icon file is required at runtime.
