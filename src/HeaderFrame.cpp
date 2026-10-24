@@ -1,4 +1,5 @@
 #include "HeaderFrame.h"
+#include "AppIcon.h"
 #include "DicomUtils.h"
 
 #include <dcmtk/dcmdata/dcfilefo.h>
@@ -95,6 +96,7 @@ HeaderFrame::HeaderFrame(wxWindow* parent,
       instanceNumber_(sourceHit.instanceNumber),
       modality_(sourceHit.modality)
 {
+    ApplyEviAppIcon(this);
     SetMinSize(wxSize(900, 580));
     SetFont(wxFont(wxFontInfo(10).FaceName(wxString(L"Segoe UI"))));
     BuildUi();

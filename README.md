@@ -220,6 +220,7 @@ Ctrl+Shift+B
 
 ```text
 src/                 C++ application sources
+resources/           Embedded Windows application icon
 cmake/               CMake helper scripts
 .vscode/             VS Code tasks and extension recommendations
 CMakeLists.txt        CMake project definition
@@ -231,3 +232,7 @@ THIRD_PARTY.md        third-party component information
 ```
 
 Build output directories such as `build/`, `.build/`, and executable release artifacts under `dist/` are excluded from normal source control.
+
+## Windows application identity
+
+EVI is distributed as a native Windows executable with an embedded multi-resolution application icon. The same EVI icon is used by the executable, the main application window, the DICOM Header Inspector, the Windows taskbar, and Alt+Tab. No external icon file is required at runtime.

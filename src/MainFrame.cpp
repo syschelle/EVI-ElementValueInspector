@@ -1,4 +1,5 @@
 #include "MainFrame.h"
+#include "AppIcon.h"
 #include "DicomScanner.h"
 #include "DicomUtils.h"
 #include "HeaderFrame.h"
@@ -148,6 +149,7 @@ MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, wxString(L"ElementValueInspector (EVI)"),
               wxDefaultPosition, wxSize(1500, 920))
 {
+    ApplyEviAppIcon(this);
     SetMinSize(wxSize(1180, 720));
     SetFont(wxFont(wxFontInfo(10).FaceName(wxString(L"Segoe UI"))));
     BuildUi();
@@ -182,7 +184,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.15"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.16"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -370,7 +372,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.15"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.16"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",

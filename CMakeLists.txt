@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(ElementValueInspector VERSION 0.2.15 LANGUAGES C CXX)
+project(ElementValueInspector VERSION 0.2.16 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,6 +63,8 @@ FetchContent_MakeAvailable(dcmtk)
 
 add_executable(evi WIN32
     src/main.cpp
+    src/AppIcon.cpp
+    src/AppIcon.h
     src/MainFrame.cpp
     src/MainFrame.h
     src/TagDialog.cpp
@@ -77,6 +79,7 @@ add_executable(evi WIN32
     src/UiLanguage.h
     src/UiTheme.h
     src/evi.rc
+    resources/evi.ico
 )
 
 # DCMTK targets use plain library names when included in-tree.
@@ -93,7 +96,10 @@ if(WIN32)
     target_link_libraries(evi PRIVATE dwmapi uxtheme)
 endif()
 
-target_include_directories(evi PRIVATE src)
+target_include_directories(evi PRIVATE
+    src
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+)
 
 target_compile_definitions(evi PRIVATE
     UNICODE

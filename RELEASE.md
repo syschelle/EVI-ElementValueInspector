@@ -1,17 +1,15 @@
-# EVI v0.2.15
+# EVI v0.2.16
 
-## Grouped sequences in the DICOM Header Inspector
+## Native Windows application icon
 
-The per-instance DICOM Header Inspector now presents nested DICOM sequences as real expandable groups instead of displaying all elements in one flat list.
+EVI now includes its own application icon based on the supplied gold EVI artwork.
 
-### Improved
+### Added
 
-- `SQ` elements are shown as expandable sequence nodes.
-- Elements contained in a sequence are displayed directly below their parent sequence.
-- Nested sequences are grouped recursively below their corresponding parent sequence.
-- Dataset and File Meta Information are shown as separate top-level sections.
-- Sequence groups remain collapsed by default for a cleaner overview.
-- Opening an instance from a study-search result still jumps to the originating DICOM element and now automatically expands all required parent sequences.
-- Header-local search continues to be independent of the main study search and automatically expands the hierarchy when a match is selected.
+- Embedded multi-resolution Windows icon in `evi.exe`.
+- Application icon for the main EVI window.
+- Application icon for the per-instance DICOM Header Inspector.
+- The same icon is available to Windows Explorer, the taskbar and Alt+Tab through the executable resources and top-level window icons.
+- Icon sizes embedded in the ICO resource: 16, 24, 32, 48, 64, 128 and 256 pixels.
 
-No behavior of the initial study search is changed by this release.
+The icon is compiled into the executable. No external image or icon file is required next to `evi.exe` at runtime.
