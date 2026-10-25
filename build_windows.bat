@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "APP_VERSION=0.2.19"
+set "APP_VERSION=0.2.20"
 set "ROOT=%CD%"
 set "LOCAL=%ROOT%\.build"
 set "CMAKE_HOME=%LOCAL%\cmake"

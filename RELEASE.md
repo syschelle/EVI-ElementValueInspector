@@ -1,18 +1,15 @@
-# EVI v0.2.19
+# EVI v0.2.20
 
-## Multi-patient navigation and DICOM size information
+## Modern transparent application icon
 
-EVI can now scan folders containing DICOM data from multiple patients while keeping the original tag search global across the entire selected directory tree.
+This release replaces the previous application icon with the new modern navy EVI monogram.
 
-### Added
+### Changed
 
-- Patient selector for switching between all patients detected during a scan.
-- Study selector for patients that contain more than one study.
-- Patient/study switching filters the already collected results and does not start a new scan or change the initial DICOM tag search.
-- Study size in the compact study information strip.
-- Series size column in the Series list.
-- Instance/file size column in Matches and instances.
-- Human-readable automatic size formatting in KB, MB, and GB.
-- CSV export now includes exact study, series, and instance sizes in bytes.
+- New navy EVI monogram with a transparent background.
+- Updated embedded multi-resolution Windows icon for 16, 24, 32, 48, 64, 128, and 256 pixel sizes.
+- The new icon is used by `evi.exe`, the main window, the DICOM Header Inspector, the Windows taskbar, Explorer, and Alt+Tab.
+- Transparent source artwork is retained in `resources/evi-logo.png`.
+- Corrected Windows executable file/product version resources to 0.2.20.
 
-The scan still recursively covers the complete selected folder tree before the patient and study views are filtered.
+No external image or icon file is required when running the compiled executable.
