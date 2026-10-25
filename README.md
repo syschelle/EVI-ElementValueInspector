@@ -119,6 +119,7 @@ EVI provides a compact native Windows interface with:
 - high-DPI awareness
 - modern Windows common controls
 - compact study information strip
+- resizable 50/50 Series / Matches workspace with a manually draggable splitter
 - alternating table rows for easier reading
 - progress feedback during scanning
 - scan cancellation

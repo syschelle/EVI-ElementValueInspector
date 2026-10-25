@@ -1,15 +1,15 @@
-# EVI v0.2.17
+# EVI v0.2.18
 
-## Transparent Windows application icon
+## Balanced series and match panes
 
-EVI now uses the transparent version of the supplied gold EVI artwork as its native Windows application icon.
+The main study view now opens with the **Series** and **Matches and instances** areas sharing the available vertical workspace equally.
 
 ### Changed
 
-- Replaced the previous application icon with the transparent EVI logo.
-- Preserved alpha transparency in the Windows ICO resource.
-- Embedded multiple Windows icon sizes: 16, 24, 32, 48, 64, 128 and 256 pixels.
-- The same transparent icon is used by `evi.exe`, the main EVI window, the DICOM Header Inspector, the Windows taskbar and Alt+Tab.
-- No external image or icon file is required at runtime.
+- The main horizontal splitter now starts at a true 50/50 height allocation after the window has completed its initial layout.
+- The lower **Matches and instances** pane therefore remains visible when EVI starts, even on smaller window sizes.
+- Splitter sash gravity is now 0.5 so both panes grow and shrink evenly when the main window is resized.
+- The splitter remains fully user-adjustable with the mouse.
+- A manually chosen splitter position is not forcibly reset during later window resizing.
 
-The portable release remains a single native `evi.exe` plus the separately published SHA-256 checksum file.
+All DICOM search, series filtering, header inspection, language, appearance, and export behavior remains unchanged.

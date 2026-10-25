@@ -184,7 +184,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.17"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.18"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -334,10 +334,25 @@ void MainFrame::BuildUi() {
     hitSizer->Add(hitButtons, 0, wxEXPAND);
     hitsPanel_->SetSizer(hitSizer);
 
-    splitter_->SplitHorizontally(seriesPanel_, hitsPanel_, 225);
+    // Start with an equal 50/50 vertical split. The sash remains user-draggable.
+    // A gravity of 0.5 distributes later window-height changes evenly between
+    // both panes without resetting a manually chosen sash position.
     splitter_->SetMinimumPaneSize(130);
-    splitter_->SetSashGravity(0.35);
+    splitter_->SplitHorizontally(seriesPanel_, hitsPanel_, 260);
+    splitter_->SetSashGravity(0.5);
     root->Add(splitter_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+
+    // The splitter does not know its final client height until the frame has
+    // completed its first layout. Position it at exactly 50% on the first UI
+    // turn so the lower matches pane can never start collapsed/off-screen.
+    CallAfter([this]() {
+        if (!splitter_ || !splitter_->IsSplit()) return;
+        const int height = splitter_->GetClientSize().GetHeight();
+        const int minimum = splitter_->GetMinimumPaneSize();
+        if (height > minimum * 2) {
+            splitter_->SetSashPosition(height / 2, true);
+        }
+    });
 
     footer_ = new wxStaticText(rootPanel_, wxID_ANY, wxEmptyString);
     root->Add(footer_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
@@ -372,7 +387,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.17"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.18"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",

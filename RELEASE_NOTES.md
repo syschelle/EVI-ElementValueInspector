@@ -1,13 +1,12 @@
-# EVI v0.2.17 Release Notes
+# EVI v0.2.18 Release Notes
 
 ## Changed
 
-- Replaced the previous EVI application icon with the new transparent gold EVI logo.
-- Preserved the transparent background in the embedded Windows icon resource.
-- Regenerated all common icon sizes for Explorer, taskbar, Alt+Tab and top-level EVI windows.
+- The **Series** and **Matches and instances** panes now start with an equal 50/50 vertical split.
+- The initial sash position is calculated after the first completed layout, preventing the lower pane from starting hidden or collapsed.
+- Window resizing distributes available height evenly between both panes.
+- The splitter remains manually draggable and user adjustments are preserved instead of being reset to 50/50.
 
-## Packaging
+## Unchanged
 
-- The icon remains compiled directly into `evi.exe`.
-- No external icon or image file is required by the released application.
-- The portable release remains a single `evi.exe` plus the separately published SHA-256 checksum file.
+- DICOM study scanning, tag selection, per-instance header inspection, nested sequence grouping, CSV export, bilingual UI, Light/Dark modes, and the embedded EVI application icon are unchanged.
