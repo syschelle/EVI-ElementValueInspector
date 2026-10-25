@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
 #include <map>
 #include <set>
 #include <string>
@@ -20,17 +19,28 @@ struct TagEntry {
     std::string version;
 };
 
-struct StudyInfo {
+struct PatientInfo {
+    std::string patientKey;
     std::string patientName;
     std::string patientId;
+    std::set<std::string> studyKeys;
+};
+
+struct StudyInfo {
+    std::string studyKey;
+    std::string patientKey;
     std::string accessionNumber;
     std::string studyDate;
     std::string studyDescription;
     std::string studyInstanceUid;
+    std::set<std::string> seriesKeys;
+    std::uintmax_t sizeBytes{};
 };
 
 struct SeriesInfo {
     std::string seriesKey;
+    std::string patientKey;
+    std::string studyKey;
     std::string seriesNumber;
     std::string modality;
     std::string seriesDescription;
@@ -39,9 +49,12 @@ struct SeriesInfo {
     std::string seriesInstanceUid;
     std::set<std::string> instances;
     std::size_t hits{};
+    std::uintmax_t sizeBytes{};
 };
 
 struct ScanHit {
+    std::string patientKey;
+    std::string studyKey;
     std::string seriesKey;
     std::string seriesNumber;
     std::string instanceNumber;
@@ -54,6 +67,7 @@ struct ScanHit {
     std::string relativeFile;
     std::string fullFile;
     std::string sopInstanceUid;
+    std::uintmax_t instanceSizeBytes{};
 };
 
 struct ScanStats {
@@ -66,8 +80,8 @@ struct ScanStats {
 };
 
 struct ScanResult {
-    StudyInfo study;
-    bool hasStudy{};
+    std::map<std::string, PatientInfo> patients;
+    std::map<std::string, StudyInfo> studies;
     std::map<std::string, SeriesInfo> series;
     std::vector<ScanHit> hits;
     ScanStats stats;

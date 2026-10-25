@@ -20,36 +20,85 @@ bool LooksLikeDicom(DcmFileFormat& file) {
         || !DicomUtils::GetString(ds, DCM_Modality).empty();
 }
 
-std::string SeriesKey(DcmDataset* ds, const std::filesystem::path& file) {
-    std::string uid = DicomUtils::GetString(ds, DCM_SeriesInstanceUID);
-    if (!uid.empty()) return uid;
+std::string PatientKey(DcmDataset* ds) {
+    const std::string id = DicomUtils::GetString(ds, DCM_PatientID);
+    const std::string name = DicomUtils::GetString(ds, DCM_PatientName);
+    if (!id.empty() || !name.empty()) return id + "|" + name;
+    return "UNKNOWN_PATIENT";
+}
 
-    std::string number = DicomUtils::GetString(ds, DCM_SeriesNumber);
-    std::string desc = DicomUtils::GetString(ds, DCM_SeriesDescription);
-    std::string modality = DicomUtils::GetString(ds, DCM_Modality);
-    if (!number.empty() || !desc.empty() || !modality.empty()) {
-        return number + "|" + desc + "|" + modality;
+std::string StudyKey(DcmDataset* ds, const std::filesystem::path& file, const std::string& patientKey) {
+    const std::string uid = DicomUtils::GetString(ds, DCM_StudyInstanceUID);
+    if (!uid.empty()) return patientKey + "|" + uid;
+
+    const std::string date = DicomUtils::GetString(ds, DCM_StudyDate);
+    const std::string desc = DicomUtils::GetString(ds, DCM_StudyDescription);
+    const std::string accession = DicomUtils::GetString(ds, DCM_AccessionNumber);
+    if (!date.empty() || !desc.empty() || !accession.empty()) {
+        return patientKey + "|" + date + "|" + accession + "|" + desc;
     }
-    return "NO_SERIES_UID|" + DicomUtils::ToUtf8Path(file.parent_path());
+    return patientKey + "|NO_STUDY_UID|" + DicomUtils::ToUtf8Path(file.parent_path());
 }
 
-void PopulateStudy(ScanResult& result, DcmDataset* ds) {
-    if (result.hasStudy || !ds) return;
-    result.study.patientName = DicomUtils::GetString(ds, DCM_PatientName);
-    result.study.patientId = DicomUtils::GetString(ds, DCM_PatientID);
-    result.study.accessionNumber = DicomUtils::GetString(ds, DCM_AccessionNumber);
-    result.study.studyDate = DicomUtils::GetString(ds, DCM_StudyDate);
-    result.study.studyDescription = DicomUtils::GetString(ds, DCM_StudyDescription);
-    result.study.studyInstanceUid = DicomUtils::GetString(ds, DCM_StudyInstanceUID);
-    result.hasStudy = true;
+std::string SeriesKey(DcmDataset* ds, const std::filesystem::path& file, const std::string& studyKey) {
+    const std::string uid = DicomUtils::GetString(ds, DCM_SeriesInstanceUID);
+    if (!uid.empty()) return studyKey + "|" + uid;
+
+    const std::string number = DicomUtils::GetString(ds, DCM_SeriesNumber);
+    const std::string desc = DicomUtils::GetString(ds, DCM_SeriesDescription);
+    const std::string modality = DicomUtils::GetString(ds, DCM_Modality);
+    if (!number.empty() || !desc.empty() || !modality.empty()) {
+        return studyKey + "|" + number + "|" + desc + "|" + modality;
+    }
+    return studyKey + "|NO_SERIES_UID|" + DicomUtils::ToUtf8Path(file.parent_path());
 }
 
-SeriesInfo& GetSeries(ScanResult& result, DcmDataset* ds, const std::filesystem::path& file) {
-    const std::string key = SeriesKey(ds, file);
+PatientInfo& GetPatient(ScanResult& result, DcmDataset* ds) {
+    const std::string key = PatientKey(ds);
+    auto [it, inserted] = result.patients.try_emplace(key);
+    PatientInfo& info = it->second;
+    if (inserted) {
+        info.patientKey = key;
+        info.patientName = DicomUtils::GetString(ds, DCM_PatientName);
+        info.patientId = DicomUtils::GetString(ds, DCM_PatientID);
+    }
+    return info;
+}
+
+StudyInfo& GetStudy(ScanResult& result,
+                    DcmDataset* ds,
+                    const std::filesystem::path& file,
+                    const std::string& patientKey,
+                    std::uintmax_t fileSize) {
+    const std::string key = StudyKey(ds, file, patientKey);
+    auto [it, inserted] = result.studies.try_emplace(key);
+    StudyInfo& info = it->second;
+    if (inserted) {
+        info.studyKey = key;
+        info.patientKey = patientKey;
+        info.accessionNumber = DicomUtils::GetString(ds, DCM_AccessionNumber);
+        info.studyDate = DicomUtils::GetString(ds, DCM_StudyDate);
+        info.studyDescription = DicomUtils::GetString(ds, DCM_StudyDescription);
+        info.studyInstanceUid = DicomUtils::GetString(ds, DCM_StudyInstanceUID);
+    }
+    info.sizeBytes += fileSize;
+    result.patients[patientKey].studyKeys.insert(key);
+    return info;
+}
+
+SeriesInfo& GetSeries(ScanResult& result,
+                      DcmDataset* ds,
+                      const std::filesystem::path& file,
+                      const std::string& patientKey,
+                      const std::string& studyKey,
+                      std::uintmax_t fileSize) {
+    const std::string key = SeriesKey(ds, file, studyKey);
     auto [it, inserted] = result.series.try_emplace(key);
     SeriesInfo& info = it->second;
     if (inserted) {
         info.seriesKey = key;
+        info.patientKey = patientKey;
+        info.studyKey = studyKey;
         info.seriesNumber = DicomUtils::GetString(ds, DCM_SeriesNumber);
         info.modality = DicomUtils::GetString(ds, DCM_Modality);
         info.seriesDescription = DicomUtils::GetString(ds, DCM_SeriesDescription);
@@ -61,6 +110,8 @@ SeriesInfo& GetSeries(ScanResult& result, DcmDataset* ds, const std::filesystem:
     std::string instance = DicomUtils::GetString(ds, DCM_SOPInstanceUID);
     if (instance.empty()) instance = DicomUtils::ToUtf8Path(file);
     info.instances.insert(std::move(instance));
+    info.sizeBytes += fileSize;
+    result.studies[studyKey].seriesKeys.insert(key);
     return info;
 }
 
@@ -71,7 +122,10 @@ void CollectMatches(
     const std::filesystem::path& root,
     const std::filesystem::path& file,
     DcmDataset* ds,
+    const std::string& patientKey,
+    const std::string& studyKey,
     const std::string& seriesKey,
+    std::uintmax_t fileSize,
     UiLanguage language,
     std::vector<ScanHit>& hits)
 {
@@ -83,6 +137,8 @@ void CollectMatches(
         if (!obj || obj->getTag().getTagKey() != target) continue;
 
         ScanHit hit;
+        hit.patientKey = patientKey;
+        hit.studyKey = studyKey;
         hit.seriesKey = seriesKey;
         hit.seriesNumber = DicomUtils::GetString(ds, DCM_SeriesNumber);
         hit.instanceNumber = DicomUtils::GetString(ds, DCM_InstanceNumber);
@@ -98,6 +154,7 @@ void CollectMatches(
         hit.relativeFile = DicomUtils::ToUtf8Path(ec ? file.filename() : relative);
         hit.fullFile = DicomUtils::ToUtf8Path(file);
         hit.sopInstanceUid = DicomUtils::GetString(ds, DCM_SOPInstanceUID);
+        hit.instanceSizeBytes = fileSize;
         hits.push_back(std::move(hit));
     }
 }
@@ -151,12 +208,23 @@ std::shared_ptr<ScanResult> DicomScanner::Scan(
         dcm.convertToUTF8();
 #endif
 
-        PopulateStudy(*result, ds);
-        SeriesInfo& series = GetSeries(*result, ds, file);
+        std::error_code sizeEc;
+        const std::uintmax_t fileSize = std::filesystem::file_size(file, sizeEc);
+        const std::uintmax_t safeFileSize = sizeEc ? 0 : fileSize;
+
+        PatientInfo& patient = GetPatient(*result, ds);
+        StudyInfo& study = GetStudy(*result, ds, file, patient.patientKey, safeFileSize);
+        SeriesInfo& series = GetSeries(*result, ds, file, patient.patientKey, study.studyKey, safeFileSize);
 
         const std::size_t before = result->hits.size();
-        CollectMatches(ds, target, {}, root, file, ds, series.seriesKey, language, result->hits);
-        CollectMatches(dcm.getMetaInfo(), target, language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information", root, file, ds, series.seriesKey, language, result->hits);
+        CollectMatches(ds, target, {}, root, file, ds,
+                       patient.patientKey, study.studyKey, series.seriesKey,
+                       safeFileSize, language, result->hits);
+        CollectMatches(dcm.getMetaInfo(), target,
+                       language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information",
+                       root, file, ds,
+                       patient.patientKey, study.studyKey, series.seriesKey,
+                       safeFileSize, language, result->hits);
         const std::size_t added = result->hits.size() - before;
 
         if (added > 0) {

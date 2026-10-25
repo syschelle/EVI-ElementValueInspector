@@ -1,15 +1,18 @@
-# EVI v0.2.18
+# EVI v0.2.19
 
-## Balanced series and match panes
+## Multi-patient navigation and DICOM size information
 
-The main study view now opens with the **Series** and **Matches and instances** areas sharing the available vertical workspace equally.
+EVI can now scan folders containing DICOM data from multiple patients while keeping the original tag search global across the entire selected directory tree.
 
-### Changed
+### Added
 
-- The main horizontal splitter now starts at a true 50/50 height allocation after the window has completed its initial layout.
-- The lower **Matches and instances** pane therefore remains visible when EVI starts, even on smaller window sizes.
-- Splitter sash gravity is now 0.5 so both panes grow and shrink evenly when the main window is resized.
-- The splitter remains fully user-adjustable with the mouse.
-- A manually chosen splitter position is not forcibly reset during later window resizing.
+- Patient selector for switching between all patients detected during a scan.
+- Study selector for patients that contain more than one study.
+- Patient/study switching filters the already collected results and does not start a new scan or change the initial DICOM tag search.
+- Study size in the compact study information strip.
+- Series size column in the Series list.
+- Instance/file size column in Matches and instances.
+- Human-readable automatic size formatting in KB, MB, and GB.
+- CSV export now includes exact study, series, and instance sizes in bytes.
 
-All DICOM search, series filtering, header inspection, language, appearance, and export behavior remains unchanged.
+The scan still recursively covers the complete selected folder tree before the patient and study views are filtered.

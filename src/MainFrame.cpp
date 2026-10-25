@@ -46,7 +46,9 @@ enum {
     ID_SHOW_ALL,
     ID_EXPORT,
     ID_LANGUAGE,
-    ID_THEME
+    ID_THEME,
+    ID_PATIENT,
+    ID_STUDY
 };
 
 struct Palette {
@@ -95,6 +97,39 @@ wxString W(const std::string& text) {
 std::string U8(const wxString& text) {
     const wxScopedCharBuffer buffer = text.ToUTF8();
     return buffer.data() ? std::string(buffer.data()) : std::string{};
+}
+
+wxString FormatByteSize(std::uintmax_t bytes) {
+    constexpr double kKB = 1024.0;
+    constexpr double kMB = 1024.0 * 1024.0;
+    constexpr double kGB = 1024.0 * 1024.0 * 1024.0;
+    const double value = static_cast<double>(bytes);
+    if (value >= kGB) return wxString::Format(L"%.2f GB", value / kGB);
+    if (value >= kMB) return wxString::Format(L"%.2f MB", value / kMB);
+    if (value >= kKB) return wxString::Format(L"%.2f KB", value / kKB);
+    return wxString::Format(L"%llu B", static_cast<unsigned long long>(bytes));
+}
+
+wxString PatientDisplay(const PatientInfo& patient, UiLanguage language) {
+    wxString name = patient.patientName.empty()
+        ? (language == UiLanguage::German ? wxString(L"Unbekannter Patient") : wxString(L"Unknown patient"))
+        : W(patient.patientName);
+    if (!patient.patientId.empty()) name += wxString(L"  ·  ") + W(patient.patientId);
+    return name;
+}
+
+wxString StudyDisplay(const StudyInfo& study, UiLanguage language) {
+    wxString text;
+    if (!study.studyDate.empty()) text += W(study.studyDate);
+    if (!study.studyDescription.empty()) {
+        if (!text.empty()) text += wxString(L"  ·  ");
+        text += W(study.studyDescription);
+    }
+    if (text.empty() && !study.accessionNumber.empty()) text = W(study.accessionNumber);
+    if (text.empty() && !study.studyInstanceUid.empty()) text = W(study.studyInstanceUid);
+    if (text.empty()) text = language == UiLanguage::German ? wxString(L"Unbekannte Studie") : wxString(L"Unknown study");
+    text += wxString(L"  ·  ") + FormatByteSize(study.sizeBytes);
+    return text;
 }
 
 wxStaticText* AddCompactInfoPair(wxWindow* parent,
@@ -184,7 +219,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.18"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.19"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -264,7 +299,8 @@ void MainFrame::BuildUi() {
     progressRow->Add(status_, 2, wxALIGN_CENTER_VERTICAL);
     root->Add(progressRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-    // Very compact study strip: one row, no tall group box.
+    // Compact patient/study selector and study metadata strip. The scan always
+    // covers the complete folder tree; these selectors only filter the view.
     studyCard_ = new wxPanel(rootPanel_);
     auto* studyRow = new wxBoxSizer(wxHORIZONTAL);
     studySectionTitle_ = new wxStaticText(studyCard_, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(72, -1));
@@ -273,12 +309,31 @@ void MainFrame::BuildUi() {
     studySectionTitle_->SetFont(studyTitleFont);
     studyRow->Add(studySectionTitle_, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
 
-    patientName_ = AddCompactInfoPair(studyCard_, studyRow, patientNameLabel_, 2, 130);
-    patientId_ = AddCompactInfoPair(studyCard_, studyRow, patientIdLabel_, 1, 100);
-    studyDate_ = AddCompactInfoPair(studyCard_, studyRow, studyDateLabel_, 1, 90);
-    accession_ = AddCompactInfoPair(studyCard_, studyRow, accessionLabel_, 1, 120);
-    studyDescription_ = AddCompactInfoPair(studyCard_, studyRow, studyDescriptionLabel_, 3, 210);
-    studyUid_ = AddCompactInfoPair(studyCard_, studyRow, studyUidLabel_, 3, 260);
+    auto* patientBox = new wxBoxSizer(wxVERTICAL);
+    patientChoiceLabel_ = new wxStaticText(studyCard_, wxID_ANY, wxEmptyString);
+    wxFont compactKeyFont = patientChoiceLabel_->GetFont();
+    compactKeyFont.SetPointSize(std::max(8, compactKeyFont.GetPointSize() - 1));
+    compactKeyFont.MakeBold();
+    patientChoiceLabel_->SetFont(compactKeyFont);
+    patientChoice_ = new wxChoice(studyCard_, ID_PATIENT, wxDefaultPosition, wxSize(230, -1));
+    patientChoice_->Enable(false);
+    patientBox->Add(patientChoiceLabel_, 0, wxBOTTOM, 1);
+    patientBox->Add(patientChoice_, 0, wxEXPAND);
+    studyRow->Add(patientBox, 2, wxEXPAND | wxRIGHT, 12);
+
+    auto* studyBox = new wxBoxSizer(wxVERTICAL);
+    studyChoiceLabel_ = new wxStaticText(studyCard_, wxID_ANY, wxEmptyString);
+    studyChoiceLabel_->SetFont(compactKeyFont);
+    studyChoice_ = new wxChoice(studyCard_, ID_STUDY, wxDefaultPosition, wxSize(300, -1));
+    studyChoice_->Enable(false);
+    studyBox->Add(studyChoiceLabel_, 0, wxBOTTOM, 1);
+    studyBox->Add(studyChoice_, 0, wxEXPAND);
+    studyRow->Add(studyBox, 3, wxEXPAND | wxRIGHT, 12);
+
+    accession_ = AddCompactInfoPair(studyCard_, studyRow, accessionLabel_, 1, 95);
+    studyDate_ = AddCompactInfoPair(studyCard_, studyRow, studyDateLabel_, 1, 85);
+    studySize_ = AddCompactInfoPair(studyCard_, studyRow, studySizeLabel_, 1, 90);
+    studyUid_ = AddCompactInfoPair(studyCard_, studyRow, studyUidLabel_, 3, 250);
     studyCard_->SetSizer(studyRow);
     root->Add(studyCard_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
@@ -300,6 +355,7 @@ void MainFrame::BuildUi() {
     seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 130);
     seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 80);
     seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 70);
+    seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 100);
     seriesList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 420);
     seriesSizer->Add(seriesList_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
     seriesPanel_->SetSizer(seriesSizer);
@@ -317,6 +373,7 @@ void MainFrame::BuildUi() {
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 210);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 50);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 330);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_RIGHT, 100);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 300);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 250);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 350);
@@ -369,6 +426,8 @@ void MainFrame::BindEvents() {
     Bind(wxEVT_BUTTON, &MainFrame::OnExport, this, ID_EXPORT);
     Bind(wxEVT_CHOICE, &MainFrame::OnLanguageChanged, this, ID_LANGUAGE);
     Bind(wxEVT_CHOICE, &MainFrame::OnThemeChanged, this, ID_THEME);
+    Bind(wxEVT_CHOICE, &MainFrame::OnPatientChanged, this, ID_PATIENT);
+    Bind(wxEVT_CHOICE, &MainFrame::OnStudyChanged, this, ID_STUDY);
     tag_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     folder_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     seriesList_->Bind(wxEVT_LIST_ITEM_SELECTED, &MainFrame::OnSeriesSelected, this);
@@ -387,7 +446,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.18"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.19"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -411,11 +470,17 @@ void MainFrame::ApplyLanguage() {
     cancel_->SetLabel(L(L"Abbrechen", L"Cancel"));
 
     studySectionTitle_->SetLabel(L(L"STUDIE", L"STUDY"));
-    patientNameLabel_->SetLabel(L(L"Patient", L"Patient"));
-    patientIdLabel_->SetLabel(L(L"Patienten-ID", L"Patient ID"));
+    patientChoiceLabel_->SetLabel(L(L"Patient", L"Patient"));
+    studyChoiceLabel_->SetLabel(L(L"Studie", L"Study"));
+    patientChoice_->SetToolTip(L(
+        L"Filtert nur die Anzeige. Die DICOM-Suche läuft weiterhin über den gesamten ausgewählten Verzeichnisbaum.",
+        L"Filters only the view. The DICOM scan still covers the entire selected folder tree."));
+    studyChoice_->SetToolTip(L(
+        L"Studie des ausgewählten Patienten anzeigen.",
+        L"Show a study for the selected patient."));
     accessionLabel_->SetLabel(L(L"Accession", L"Accession"));
     studyDateLabel_->SetLabel(L(L"Datum", L"Date"));
-    studyDescriptionLabel_->SetLabel(L(L"Beschreibung", L"Description"));
+    studySizeLabel_->SetLabel(L(L"Studiengröße", L"Study size"));
     studyUidLabel_->SetLabel(L(L"Study UID", L"Study UID"));
 
     seriesTitle_->SetLabel(L(L"Serien", L"Series"));
@@ -433,7 +498,8 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(seriesList_, 4, L(L"Körperregion", L"Body part"));
     SetColumnTitle(seriesList_, 5, L(L"Instanzen", L"Instances"));
     SetColumnTitle(seriesList_, 6, L(L"Treffer", L"Matches"));
-    SetColumnTitle(seriesList_, 7, wxString(L"Series Instance UID"));
+    SetColumnTitle(seriesList_, 7, L(L"Größe", L"Size"));
+    SetColumnTitle(seriesList_, 8, wxString(L"Series Instance UID"));
 
     SetColumnTitle(hitList_, 0, L(L"Serie", L"Series"));
     SetColumnTitle(hitList_, 1, L(L"Instanz", L"Instance"));
@@ -442,9 +508,10 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(hitList_, 4, L(L"Name", L"Name"));
     SetColumnTitle(hitList_, 5, wxString(L"VR"));
     SetColumnTitle(hitList_, 6, L(L"Wert", L"Value"));
-    SetColumnTitle(hitList_, 7, L(L"Sequence-Pfad", L"Sequence path"));
-    SetColumnTitle(hitList_, 8, L(L"Datei", L"File"));
-    SetColumnTitle(hitList_, 9, wxString(L"SOP Instance UID"));
+    SetColumnTitle(hitList_, 7, L(L"Größe", L"Size"));
+    SetColumnTitle(hitList_, 8, L(L"Sequence-Pfad", L"Sequence path"));
+    SetColumnTitle(hitList_, 9, L(L"Datei", L"File"));
+    SetColumnTitle(hitList_, 10, wxString(L"SOP Instance UID"));
 
     hitList_->SetToolTip(L(
         L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
@@ -482,17 +549,15 @@ void MainFrame::ApplyTheme() {
     setText(tagInfo_, p.muted);
     setText(status_, p.muted);
     setText(studySectionTitle_, p.accent);
-    setText(patientNameLabel_, p.muted);
-    setText(patientIdLabel_, p.muted);
+    setText(patientChoiceLabel_, p.muted);
+    setText(studyChoiceLabel_, p.muted);
     setText(accessionLabel_, p.muted);
     setText(studyDateLabel_, p.muted);
-    setText(studyDescriptionLabel_, p.muted);
+    setText(studySizeLabel_, p.muted);
     setText(studyUidLabel_, p.muted);
-    setText(patientName_, p.text);
-    setText(patientId_, p.text);
     setText(accession_, p.text);
     setText(studyDate_, p.text);
-    setText(studyDescription_, p.text);
+    setText(studySize_, p.text);
     setText(studyUid_, p.text);
     setText(seriesTitle_, p.text);
     setText(hitsTitle_, p.text);
@@ -502,7 +567,7 @@ void MainFrame::ApplyTheme() {
         control->SetBackgroundColour(p.input);
         control->SetForegroundColour(p.text);
     }
-    for (wxChoice* control : {languageChoice_, themeChoice_}) {
+    for (wxChoice* control : {patientChoice_, studyChoice_, languageChoice_, themeChoice_}) {
         control->SetBackgroundColour(p.input);
         control->SetForegroundColour(p.text);
     }
@@ -518,6 +583,7 @@ void MainFrame::ApplyTheme() {
     ApplyExplorerTheme(hitList_, dark);
     for (wxWindow* control : {
              static_cast<wxWindow*>(folder_), static_cast<wxWindow*>(tag_),
+             static_cast<wxWindow*>(patientChoice_), static_cast<wxWindow*>(studyChoice_),
              static_cast<wxWindow*>(languageChoice_), static_cast<wxWindow*>(themeChoice_),
              static_cast<wxWindow*>(browse_), static_cast<wxWindow*>(chooseTag_),
              static_cast<wxWindow*>(start_), static_cast<wxWindow*>(cancel_),
@@ -569,6 +635,11 @@ void MainFrame::ApplyListRowTheme(wxListCtrl* list) {
 void MainFrame::OnLanguageChanged(wxCommandEvent&) {
     language_ = languageChoice_->GetSelection() == 1 ? UiLanguage::English : UiLanguage::German;
     ApplyLanguage();
+    if (result_) {
+        PopulatePatients();
+        PopulateStudies();
+        RefreshSelectedView();
+    }
 }
 
 void MainFrame::OnThemeChanged(wxCommandEvent&) {
@@ -621,6 +692,14 @@ void MainFrame::StartScan() {
     tagInfo_->SetLabel(W(DicomUtils::TagName(*target)));
     tagInfo_->SetToolTip(tagInfo_->GetLabel());
     result_.reset();
+    selectedPatientKey_.clear();
+    selectedStudyKey_.clear();
+    visiblePatientKeys_.clear();
+    visibleStudyKeys_.clear();
+    patientChoice_->Clear();
+    studyChoice_->Clear();
+    patientChoice_->Enable(false);
+    studyChoice_->Enable(false);
     seriesList_->DeleteAllItems();
     hitList_->DeleteAllItems();
     gauge_->SetValue(0);
@@ -699,6 +778,8 @@ void MainFrame::OnScanError(wxThreadEvent& event) {
 
 void MainFrame::PopulateResult() {
     if (!result_) return;
+    PopulatePatients();
+    PopulateStudies();
     UpdateStudyLabels();
     PopulateSeries();
     PopulateHits();
@@ -712,13 +793,13 @@ void MainFrame::UpdateStatusSummary() {
     if (language_ == UiLanguage::German) {
         const wxString state = s.cancelled ? wxString(L"Abgebrochen.") : wxString(L"Fertig.");
         status_->SetLabel(state + wxString::Format(
-            L" %zu DICOM-Dateien, %zu Dateien mit Tag, %zu Treffer, %zu Serien, %zu Lesefehler.",
-            s.dicomFiles, s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
+            L" %zu DICOM-Dateien, %zu Patienten, %zu Dateien mit Tag, %zu Treffer, %zu Serien, %zu Lesefehler.",
+            s.dicomFiles, result_->patients.size(), s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
     } else {
         const wxString state = s.cancelled ? wxString(L"Cancelled.") : wxString(L"Done.");
         status_->SetLabel(state + wxString::Format(
-            L" %zu DICOM files, %zu files with tag, %zu matches, %zu series, %zu read errors.",
-            s.dicomFiles, s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
+            L" %zu DICOM files, %zu patients, %zu files with tag, %zu matches, %zu series, %zu read errors.",
+            s.dicomFiles, result_->patients.size(), s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
     }
 }
 
@@ -728,22 +809,113 @@ void MainFrame::SetStudyValue(wxStaticText* label, const std::string& value) {
     label->SetToolTip(text);
 }
 
+void MainFrame::PopulatePatients() {
+    patientChoice_->Freeze();
+    patientChoice_->Clear();
+    visiblePatientKeys_.clear();
+    if (!result_) { patientChoice_->Thaw(); return; }
+
+    std::vector<const PatientInfo*> sorted;
+    sorted.reserve(result_->patients.size());
+    for (const auto& [key, patient] : result_->patients) sorted.push_back(&patient);
+    std::sort(sorted.begin(), sorted.end(), [](const PatientInfo* a, const PatientInfo* b) {
+        if (a->patientName != b->patientName) return a->patientName < b->patientName;
+        return a->patientId < b->patientId;
+    });
+
+    int selection = 0;
+    for (std::size_t i = 0; i < sorted.size(); ++i) {
+        patientChoice_->Append(PatientDisplay(*sorted[i], language_));
+        visiblePatientKeys_.push_back(sorted[i]->patientKey);
+        if (!selectedPatientKey_.empty() && sorted[i]->patientKey == selectedPatientKey_) {
+            selection = static_cast<int>(i);
+        }
+    }
+
+    if (!visiblePatientKeys_.empty()) {
+        patientChoice_->SetSelection(selection);
+        selectedPatientKey_ = visiblePatientKeys_[static_cast<std::size_t>(selection)];
+    } else {
+        selectedPatientKey_.clear();
+    }
+    patientChoice_->Enable(visiblePatientKeys_.size() > 1);
+    patientChoice_->Thaw();
+}
+
+void MainFrame::PopulateStudies() {
+    studyChoice_->Freeze();
+    studyChoice_->Clear();
+    visibleStudyKeys_.clear();
+    if (!result_ || selectedPatientKey_.empty()) {
+        selectedStudyKey_.clear();
+        studyChoice_->Enable(false);
+        studyChoice_->Thaw();
+        return;
+    }
+
+    const auto patientIt = result_->patients.find(selectedPatientKey_);
+    if (patientIt == result_->patients.end()) { studyChoice_->Thaw(); return; }
+
+    std::vector<const StudyInfo*> sorted;
+    for (const auto& key : patientIt->second.studyKeys) {
+        const auto it = result_->studies.find(key);
+        if (it != result_->studies.end()) sorted.push_back(&it->second);
+    }
+    std::sort(sorted.begin(), sorted.end(), [](const StudyInfo* a, const StudyInfo* b) {
+        if (a->studyDate != b->studyDate) return a->studyDate < b->studyDate;
+        if (a->studyDescription != b->studyDescription) return a->studyDescription < b->studyDescription;
+        return a->studyInstanceUid < b->studyInstanceUid;
+    });
+
+    int selection = 0;
+    for (std::size_t i = 0; i < sorted.size(); ++i) {
+        studyChoice_->Append(StudyDisplay(*sorted[i], language_));
+        visibleStudyKeys_.push_back(sorted[i]->studyKey);
+        if (!selectedStudyKey_.empty() && sorted[i]->studyKey == selectedStudyKey_) {
+            selection = static_cast<int>(i);
+        }
+    }
+
+    if (!visibleStudyKeys_.empty()) {
+        studyChoice_->SetSelection(selection);
+        selectedStudyKey_ = visibleStudyKeys_[static_cast<std::size_t>(selection)];
+    } else {
+        selectedStudyKey_.clear();
+    }
+    studyChoice_->Enable(visibleStudyKeys_.size() > 1);
+    studyChoice_->Thaw();
+}
+
+bool MainFrame::MatchesSelection(const std::string& patientKey, const std::string& studyKey) const {
+    if (!selectedPatientKey_.empty() && patientKey != selectedPatientKey_) return false;
+    if (!selectedStudyKey_.empty() && studyKey != selectedStudyKey_) return false;
+    return true;
+}
+
+void MainFrame::RefreshSelectedView() {
+    UpdateStudyLabels();
+    PopulateSeries();
+    PopulateHits();
+}
+
 void MainFrame::UpdateStudyLabels() {
-    if (!result_ || !result_->hasStudy) {
-        SetStudyValue(patientName_, {});
-        SetStudyValue(patientId_, {});
+    if (!result_ || selectedStudyKey_.empty()) {
         SetStudyValue(accession_, {});
         SetStudyValue(studyDate_, {});
-        SetStudyValue(studyDescription_, {});
+        SetStudyValue(studySize_, {});
         SetStudyValue(studyUid_, {});
         return;
     }
-    SetStudyValue(patientName_, result_->study.patientName);
-    SetStudyValue(patientId_, result_->study.patientId);
-    SetStudyValue(accession_, result_->study.accessionNumber);
-    SetStudyValue(studyDate_, result_->study.studyDate);
-    SetStudyValue(studyDescription_, result_->study.studyDescription);
-    SetStudyValue(studyUid_, result_->study.studyInstanceUid);
+
+    const auto it = result_->studies.find(selectedStudyKey_);
+    if (it == result_->studies.end()) return;
+    const StudyInfo& study = it->second;
+    SetStudyValue(accession_, study.accessionNumber);
+    SetStudyValue(studyDate_, study.studyDate);
+    const wxString size = FormatByteSize(study.sizeBytes);
+    studySize_->SetLabel(size);
+    studySize_->SetToolTip(size + wxString::Format(L" (%llu bytes)", static_cast<unsigned long long>(study.sizeBytes)));
+    SetStudyValue(studyUid_, study.studyInstanceUid);
     studyCard_->Layout();
 }
 
@@ -755,7 +927,9 @@ void MainFrame::PopulateSeries() {
 
     std::vector<const SeriesInfo*> sorted;
     sorted.reserve(result_->series.size());
-    for (const auto& [key, series] : result_->series) sorted.push_back(&series);
+    for (const auto& [key, series] : result_->series) {
+        if (MatchesSelection(series.patientKey, series.studyKey)) sorted.push_back(&series);
+    }
     std::sort(sorted.begin(), sorted.end(), [](const SeriesInfo* a, const SeriesInfo* b) {
         try {
             return std::stoi(a->seriesNumber) < std::stoi(b->seriesNumber);
@@ -772,7 +946,8 @@ void MainFrame::PopulateSeries() {
         seriesList_->SetItem(row, 4, W(s->bodyPart));
         seriesList_->SetItem(row, 5, wxString::Format(L"%zu", s->instances.size()));
         seriesList_->SetItem(row, 6, wxString::Format(L"%zu", s->hits));
-        seriesList_->SetItem(row, 7, W(s->seriesInstanceUid));
+        seriesList_->SetItem(row, 7, FormatByteSize(s->sizeBytes));
+        seriesList_->SetItem(row, 8, W(s->seriesInstanceUid));
         visibleSeriesKeys_.push_back(s->seriesKey);
     }
     ApplyListRowTheme(seriesList_);
@@ -789,6 +964,7 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
     sortedHits.reserve(result_->hits.size());
     for (std::size_t index = 0; index < result_->hits.size(); ++index) {
         const auto& h = result_->hits[index];
+        if (!MatchesSelection(h.patientKey, h.studyKey)) continue;
         if (!seriesKey.empty() && h.seriesKey != seriesKey) continue;
         sortedHits.push_back(index);
     }
@@ -840,13 +1016,30 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         hitList_->SetItem(row, 4, W(h.tagName));
         hitList_->SetItem(row, 5, W(h.vr));
         hitList_->SetItem(row, 6, W(h.value));
-        hitList_->SetItem(row, 7, W(h.sequencePath));
-        hitList_->SetItem(row, 8, W(h.relativeFile));
-        hitList_->SetItem(row, 9, W(h.sopInstanceUid));
+        hitList_->SetItem(row, 7, FormatByteSize(h.instanceSizeBytes));
+        hitList_->SetItem(row, 8, W(h.sequencePath));
+        hitList_->SetItem(row, 9, W(h.relativeFile));
+        hitList_->SetItem(row, 10, W(h.sopInstanceUid));
         visibleHitIndices_.push_back(hitIndex);
     }
     ApplyListRowTheme(hitList_);
     hitList_->Thaw();
+}
+
+void MainFrame::OnPatientChanged(wxCommandEvent&) {
+    const int selection = patientChoice_->GetSelection();
+    if (selection < 0 || static_cast<std::size_t>(selection) >= visiblePatientKeys_.size()) return;
+    selectedPatientKey_ = visiblePatientKeys_[static_cast<std::size_t>(selection)];
+    selectedStudyKey_.clear();
+    PopulateStudies();
+    RefreshSelectedView();
+}
+
+void MainFrame::OnStudyChanged(wxCommandEvent&) {
+    const int selection = studyChoice_->GetSelection();
+    if (selection < 0 || static_cast<std::size_t>(selection) >= visibleStudyKeys_.size()) return;
+    selectedStudyKey_ = visibleStudyKeys_[static_cast<std::size_t>(selection)];
+    RefreshSelectedView();
 }
 
 void MainFrame::OnSeriesSelected(wxListEvent& event) {
@@ -899,23 +1092,30 @@ void MainFrame::ExportCsv() {
     }
 
     out.write("\xEF\xBB\xBF", 3);
-    out << "PatientName;PatientID;AccessionNumber;StudyDate;StudyDescription;StudyInstanceUID;"
-           "SeriesNumber;Modality;SeriesInstanceUID;InstanceNumber;SOPInstanceUID;Tag;TagName;VR;Value;SequencePath;RelativeFile;FullFile\r\n";
+    out << "PatientName;PatientID;AccessionNumber;StudyDate;StudyDescription;StudyInstanceUID;StudySizeBytes;"
+           "SeriesNumber;Modality;SeriesInstanceUID;SeriesSizeBytes;InstanceNumber;SOPInstanceUID;InstanceSizeBytes;Tag;TagName;VR;Value;SequencePath;RelativeFile;FullFile\r\n";
 
     for (const auto& h : result_->hits) {
+        const auto patientIt = result_->patients.find(h.patientKey);
+        const auto studyIt = result_->studies.find(h.studyKey);
         const auto seriesIt = result_->series.find(h.seriesKey);
+        const PatientInfo* patient = patientIt == result_->patients.end() ? nullptr : &patientIt->second;
+        const StudyInfo* study = studyIt == result_->studies.end() ? nullptr : &studyIt->second;
         const std::string seriesUid = seriesIt == result_->series.end() ? "" : seriesIt->second.seriesInstanceUid;
-        out << CsvEscape(result_->study.patientName) << ';'
-            << CsvEscape(result_->study.patientId) << ';'
-            << CsvEscape(result_->study.accessionNumber) << ';'
-            << CsvEscape(result_->study.studyDate) << ';'
-            << CsvEscape(result_->study.studyDescription) << ';'
-            << CsvEscape(result_->study.studyInstanceUid) << ';'
+        out << CsvEscape(patient ? patient->patientName : "") << ';'
+            << CsvEscape(patient ? patient->patientId : "") << ';'
+            << CsvEscape(study ? study->accessionNumber : "") << ';'
+            << CsvEscape(study ? study->studyDate : "") << ';'
+            << CsvEscape(study ? study->studyDescription : "") << ';'
+            << CsvEscape(study ? study->studyInstanceUid : "") << ';'
+            << (study ? study->sizeBytes : 0) << ';'
             << CsvEscape(h.seriesNumber) << ';'
             << CsvEscape(h.modality) << ';'
             << CsvEscape(seriesUid) << ';'
+            << (seriesIt == result_->series.end() ? 0 : seriesIt->second.sizeBytes) << ';'
             << CsvEscape(h.instanceNumber) << ';'
             << CsvEscape(h.sopInstanceUid) << ';'
+            << h.instanceSizeBytes << ';'
             << CsvEscape(h.tag) << ';'
             << CsvEscape(h.tagName) << ';'
             << CsvEscape(h.vr) << ';'

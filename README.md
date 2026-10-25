@@ -34,16 +34,20 @@ Tags can be filtered by:
 
 The selected tag is transferred directly into the main search field.
 
-## Study and series overview
+## Patient, study, and series overview
 
-After a study has been scanned, EVI displays compact study information including:
+EVI scans the complete selected folder tree in a single pass, even when the directory contains DICOM data from multiple patients. After scanning, the result view can be switched between the detected patients without running the tag search again.
 
-- patient name
-- patient ID
+For a patient with more than one study, a separate study selector keeps the series and instance view unambiguous. The patient and study selectors only filter the already collected results; they never change the original tag search or limit which folders are scanned.
+
+The compact study strip displays:
+
+- patient selection
+- study selection
 - study date
 - accession number
-- study description
 - Study Instance UID
+- total DICOM size of the selected study
 
 Long values remain available through tooltips without consuming unnecessary screen space.
 
@@ -56,9 +60,10 @@ The series overview includes:
 - Body Part Examined
 - number of instances
 - number of matches
+- total DICOM size of the series
 - Series Instance UID
 
-All detected series are shown, including series that do not contain the requested tag.
+All detected series of the selected patient and study are shown, including series that do not contain the requested tag.
 
 ## Match details
 
@@ -73,9 +78,10 @@ Each matching DICOM element is shown together with its instance and series conte
 - element value
 - nested sequence path
 - relative source file
+- instance file size
 - SOP Instance UID
 
-Selecting a series filters the match list to that series. **Show all** restores the complete result set.
+File sizes are displayed automatically in a human-readable unit (KB, MB, or GB depending on size). Selecting a series filters the match list to that series. **Show all** restores all matches for the currently selected patient and study.
 
 ## Per-instance DICOM header inspector
 
@@ -128,7 +134,7 @@ The interface uses Unicode throughout and explicitly enables UTF-8 at the Window
 
 ## CSV export
 
-Search results can be exported as a UTF-8 CSV file. The export contains study, series, instance, tag, value, sequence-path, and source-file information.
+Search results can be exported as a UTF-8 CSV file. The export contains patient, study, series, instance, tag, value, sequence-path, source-file, and exact byte-size information for studies, series, and instances.
 
 Because exported files can contain patient information, exported CSV files should be handled according to the same privacy and security requirements as the source DICOM data.
 

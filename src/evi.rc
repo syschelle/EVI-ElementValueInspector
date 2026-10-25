@@ -22,11 +22,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", ""
             VALUE "FileDescription", "ElementValueInspector"
-            VALUE "FileVersion", "0.2.18"
+            VALUE "FileVersion", "0.2.19"
             VALUE "InternalName", "EVI"
             VALUE "OriginalFilename", "evi.exe"
             VALUE "ProductName", "ElementValueInspector"
-            VALUE "ProductVersion", "0.2.18"
+            VALUE "ProductVersion", "0.2.19"
         END
     END
     BLOCK "VarFileInfo"

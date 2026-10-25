@@ -1,12 +1,15 @@
-# EVI v0.2.18 Release Notes
+# EVI v0.2.19 Release Notes
 
-## Changed
+## Added
 
-- The **Series** and **Matches and instances** panes now start with an equal 50/50 vertical split.
-- The initial sash position is calculated after the first completed layout, preventing the lower pane from starting hidden or collapsed.
-- Window resizing distributes available height evenly between both panes.
-- The splitter remains manually draggable and user adjustments are preserved instead of being reset to 50/50.
+- Multi-patient result navigation after a single global folder scan.
+- Study selection when the selected patient contains multiple studies.
+- Study size, series size, and instance/file size information.
+- Automatic human-readable size units (KB, MB, GB).
+- Exact byte sizes in CSV exports.
 
-## Unchanged
+## Behavior
 
-- DICOM study scanning, tag selection, per-instance header inspection, nested sequence grouping, CSV export, bilingual UI, Light/Dark modes, and the embedded EVI application icon are unchanged.
+- The DICOM tag search still runs over the entire selected directory tree.
+- Changing patient or study only filters the already scanned result set.
+- The original search tag remains unchanged when switching patients or studies.

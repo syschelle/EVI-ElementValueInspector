@@ -36,9 +36,13 @@ private:
     void StartScan();
     void StopWorker();
     void PopulateResult();
+    void PopulatePatients();
+    void PopulateStudies();
     void PopulateSeries();
     void PopulateHits(const std::string& seriesKey = {});
     void UpdateStudyLabels();
+    void RefreshSelectedView();
+    bool MatchesSelection(const std::string& patientKey, const std::string& studyKey) const;
     void UpdateStatusSummary();
     void ExportCsv();
     wxString L(const wchar_t* de, const wchar_t* en) const;
@@ -53,6 +57,8 @@ private:
     void OnExport(wxCommandEvent& event);
     void OnLanguageChanged(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
+    void OnPatientChanged(wxCommandEvent& event);
+    void OnStudyChanged(wxCommandEvent& event);
     void OnSeriesSelected(wxListEvent& event);
     void OnHitActivated(wxListEvent& event);
     void OnProgress(wxThreadEvent& event);
@@ -95,17 +101,17 @@ private:
     wxStaticText* status_{};
 
     wxStaticText* studySectionTitle_{};
-    wxStaticText* patientNameLabel_{};
-    wxStaticText* patientIdLabel_{};
+    wxStaticText* patientChoiceLabel_{};
+    wxChoice* patientChoice_{};
+    wxStaticText* studyChoiceLabel_{};
+    wxChoice* studyChoice_{};
     wxStaticText* accessionLabel_{};
     wxStaticText* studyDateLabel_{};
-    wxStaticText* studyDescriptionLabel_{};
+    wxStaticText* studySizeLabel_{};
     wxStaticText* studyUidLabel_{};
-    wxStaticText* patientName_{};
-    wxStaticText* patientId_{};
     wxStaticText* accession_{};
     wxStaticText* studyDate_{};
-    wxStaticText* studyDescription_{};
+    wxStaticText* studySize_{};
     wxStaticText* studyUid_{};
 
     wxStaticText* seriesTitle_{};
@@ -118,6 +124,10 @@ private:
     std::atomic_bool cancelRequested_{false};
     std::thread worker_;
     std::shared_ptr<ScanResult> result_;
+    std::vector<std::string> visiblePatientKeys_;
+    std::vector<std::string> visibleStudyKeys_;
     std::vector<std::string> visibleSeriesKeys_;
     std::vector<std::size_t> visibleHitIndices_;
+    std::string selectedPatientKey_;
+    std::string selectedStudyKey_;
 };
