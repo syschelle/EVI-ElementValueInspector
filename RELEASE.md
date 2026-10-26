@@ -1,16 +1,13 @@
-# EVI v0.2.21
+# EVI v0.2.22
 
-## New magnifying-glass application icon
+## Changes
 
-This release replaces the previous EVI application icon with the new navy-and-white magnifying-glass monogram.
+- Separated the patient name and Patient ID in the compact study strip.
+- The patient selector now shows only the patient name; Patient ID is displayed in its own field.
+- Patient and Study labels now use the normal foreground colour instead of the muted secondary colour.
+- Patient and Study selectors remain visually active even when only one entry is available, preventing Windows from rendering their contents in disabled grey.
+- Existing full-folder scanning and patient/study view filtering behaviour is unchanged.
 
-### Changed
+## Windows binary
 
-- Replaced the previous application icon with the new EVI magnifying-glass design.
-- The outgoing right stroke of the stylized V forms the magnifying-glass handle.
-- Preserved the white outline and navy fill while removing the black background for true transparency.
-- Updated the embedded multi-resolution Windows icon for 16, 24, 32, 48, 64, 128, and 256 pixel sizes.
-- The new icon is used by `evi.exe`, the main window, the DICOM Header Inspector, the Windows taskbar, Explorer, and Alt+Tab.
-- Updated Windows executable file/product version resources to 0.2.21.
-
-No external image or icon file is required when running the compiled executable.
+The release provides `evi.exe` and its SHA-256 checksum as GitHub Release assets.

@@ -111,11 +111,9 @@ wxString FormatByteSize(std::uintmax_t bytes) {
 }
 
 wxString PatientDisplay(const PatientInfo& patient, UiLanguage language) {
-    wxString name = patient.patientName.empty()
+    return patient.patientName.empty()
         ? (language == UiLanguage::German ? wxString(L"Unbekannter Patient") : wxString(L"Unknown patient"))
         : W(patient.patientName);
-    if (!patient.patientId.empty()) name += wxString(L"  ·  ") + W(patient.patientId);
-    return name;
 }
 
 wxString StudyDisplay(const StudyInfo& study, UiLanguage language) {
@@ -315,11 +313,13 @@ void MainFrame::BuildUi() {
     compactKeyFont.SetPointSize(std::max(8, compactKeyFont.GetPointSize() - 1));
     compactKeyFont.MakeBold();
     patientChoiceLabel_->SetFont(compactKeyFont);
-    patientChoice_ = new wxChoice(studyCard_, ID_PATIENT, wxDefaultPosition, wxSize(230, -1));
+    patientChoice_ = new wxChoice(studyCard_, ID_PATIENT, wxDefaultPosition, wxSize(190, -1));
     patientChoice_->Enable(false);
     patientBox->Add(patientChoiceLabel_, 0, wxBOTTOM, 1);
     patientBox->Add(patientChoice_, 0, wxEXPAND);
     studyRow->Add(patientBox, 2, wxEXPAND | wxRIGHT, 12);
+
+    patientId_ = AddCompactInfoPair(studyCard_, studyRow, patientIdLabel_, 1, 95);
 
     auto* studyBox = new wxBoxSizer(wxVERTICAL);
     studyChoiceLabel_ = new wxStaticText(studyCard_, wxID_ANY, wxEmptyString);
@@ -470,7 +470,8 @@ void MainFrame::ApplyLanguage() {
     cancel_->SetLabel(L(L"Abbrechen", L"Cancel"));
 
     studySectionTitle_->SetLabel(L(L"STUDIE", L"STUDY"));
-    patientChoiceLabel_->SetLabel(L(L"Patient", L"Patient"));
+    patientChoiceLabel_->SetLabel(L(L"Patientenname", L"Patient name"));
+    patientIdLabel_->SetLabel(L(L"Patient ID", L"Patient ID"));
     studyChoiceLabel_->SetLabel(L(L"Studie", L"Study"));
     patientChoice_->SetToolTip(L(
         L"Filtert nur die Anzeige. Die DICOM-Suche läuft weiterhin über den gesamten ausgewählten Verzeichnisbaum.",
@@ -549,12 +550,14 @@ void MainFrame::ApplyTheme() {
     setText(tagInfo_, p.muted);
     setText(status_, p.muted);
     setText(studySectionTitle_, p.accent);
-    setText(patientChoiceLabel_, p.muted);
-    setText(studyChoiceLabel_, p.muted);
+    setText(patientChoiceLabel_, p.text);
+    setText(patientIdLabel_, p.text);
+    setText(studyChoiceLabel_, p.text);
     setText(accessionLabel_, p.muted);
     setText(studyDateLabel_, p.muted);
     setText(studySizeLabel_, p.muted);
     setText(studyUidLabel_, p.muted);
+    setText(patientId_, p.text);
     setText(accession_, p.text);
     setText(studyDate_, p.text);
     setText(studySize_, p.text);
@@ -838,7 +841,7 @@ void MainFrame::PopulatePatients() {
     } else {
         selectedPatientKey_.clear();
     }
-    patientChoice_->Enable(visiblePatientKeys_.size() > 1);
+    patientChoice_->Enable(!visiblePatientKeys_.empty());
     patientChoice_->Thaw();
 }
 
@@ -882,7 +885,7 @@ void MainFrame::PopulateStudies() {
     } else {
         selectedStudyKey_.clear();
     }
-    studyChoice_->Enable(visibleStudyKeys_.size() > 1);
+    studyChoice_->Enable(!visibleStudyKeys_.empty());
     studyChoice_->Thaw();
 }
 
@@ -899,6 +902,13 @@ void MainFrame::RefreshSelectedView() {
 }
 
 void MainFrame::UpdateStudyLabels() {
+    if (!result_ || selectedPatientKey_.empty()) {
+        SetStudyValue(patientId_, {});
+    } else {
+        const auto patientIt = result_->patients.find(selectedPatientKey_);
+        SetStudyValue(patientId_, patientIt == result_->patients.end() ? std::string{} : patientIt->second.patientId);
+    }
+
     if (!result_ || selectedStudyKey_.empty()) {
         SetStudyValue(accession_, {});
         SetStudyValue(studyDate_, {});

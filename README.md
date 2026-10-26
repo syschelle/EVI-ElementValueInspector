@@ -42,7 +42,8 @@ For a patient with more than one study, a separate study selector keeps the seri
 
 The compact study strip displays:
 
-- patient selection
+- patient name selection
+- Patient ID as a separate field
 - study selection
 - study date
 - accession number

@@ -103,6 +103,8 @@ private:
     wxStaticText* studySectionTitle_{};
     wxStaticText* patientChoiceLabel_{};
     wxChoice* patientChoice_{};
+    wxStaticText* patientIdLabel_{};
+    wxStaticText* patientId_{};
     wxStaticText* studyChoiceLabel_{};
     wxChoice* studyChoice_{};
     wxStaticText* accessionLabel_{};
