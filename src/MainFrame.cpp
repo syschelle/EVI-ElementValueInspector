@@ -41,6 +41,7 @@ namespace {
 enum {
     ID_CHOOSE_FOLDER = wxID_HIGHEST + 100,
     ID_CHOOSE_TAG,
+    ID_SEARCH_MODE,
     ID_START_SCAN,
     ID_CANCEL_SCAN,
     ID_SHOW_ALL,
@@ -217,7 +218,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.21"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.23"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -265,8 +266,12 @@ void MainFrame::BuildUi() {
     sourceRow->Add(folder_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     sourceRow->Add(browse_, 0, wxALIGN_CENTER_VERTICAL);
 
-    tagTitle_ = new wxStaticText(searchCard_, wxID_ANY, wxString(L"DICOM Tag"), wxDefaultPosition, wxSize(105, -1));
+    tagTitle_ = new wxStaticText(searchCard_, wxID_ANY, wxString(L"Search mode"), wxDefaultPosition, wxSize(105, -1));
     tagTitle_->SetFont(sectionFont);
+    searchModeChoice_ = new wxChoice(searchCard_, ID_SEARCH_MODE, wxDefaultPosition, wxSize(145, -1));
+    searchModeChoice_->Append(wxString(L"DICOM tag"));
+    searchModeChoice_->Append(wxString(L"Value"));
+    searchModeChoice_->SetSelection(0);
     tag_ = new wxTextCtrl(searchCard_, wxID_ANY, wxString(L"(0018,1030)"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     chooseTag_ = new wxButton(searchCard_, ID_CHOOSE_TAG, wxEmptyString);
     chooseTag_->SetMinSize(wxSize(150, 34));
@@ -279,6 +284,7 @@ void MainFrame::BuildUi() {
     cancel_->Enable(false);
 
     tagRow->Add(tagTitle_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    tagRow->Add(searchModeChoice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     tagRow->Add(tag_, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     tagRow->Add(chooseTag_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
     tagRow->Add(tagInfo_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -428,6 +434,7 @@ void MainFrame::BindEvents() {
     Bind(wxEVT_CHOICE, &MainFrame::OnThemeChanged, this, ID_THEME);
     Bind(wxEVT_CHOICE, &MainFrame::OnPatientChanged, this, ID_PATIENT);
     Bind(wxEVT_CHOICE, &MainFrame::OnStudyChanged, this, ID_STUDY);
+    Bind(wxEVT_CHOICE, &MainFrame::OnSearchModeChanged, this, ID_SEARCH_MODE);
     tag_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     folder_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     seriesList_->Bind(wxEVT_LIST_ITEM_SELECTED, &MainFrame::OnSeriesSelected, this);
@@ -446,7 +453,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.21"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.23"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -463,10 +470,14 @@ void MainFrame::ApplyLanguage() {
     sourceTitle_->SetLabel(L(L"Studienordner", L"Study folder"));
     folder_->SetHint(L(L"Ordner mit der DICOM-Studie auswählen ...", L"Select the folder containing the DICOM study ..."));
     browse_->SetLabel(L(L"Ordner auswählen", L"Choose folder"));
-    tagTitle_->SetLabel(L(L"DICOM-Tag", L"DICOM tag"));
-    tag_->SetHint(L(L"(0018,1030), 00181030 oder ProtocolName", L"(0018,1030), 00181030 or ProtocolName"));
+    tagTitle_->SetLabel(L(L"Suchmodus", L"Search mode"));
+    const int searchModeSelection = searchModeChoice_->GetSelection();
+    searchModeChoice_->Clear();
+    searchModeChoice_->Append(L(L"DICOM-Tag", L"DICOM tag"));
+    searchModeChoice_->Append(L(L"Inhalt", L"Value"));
+    searchModeChoice_->SetSelection(searchModeSelection < 0 ? 0 : searchModeSelection);
     chooseTag_->SetLabel(L(L"Tag auswählen", L"Select tag"));
-    start_->SetLabel(L(L"Studie durchsuchen", L"Scan study"));
+    start_->SetLabel(L(L"Verzeichnis durchsuchen", L"Scan folder"));
     cancel_->SetLabel(L(L"Abbrechen", L"Cancel"));
 
     studySectionTitle_->SetLabel(L(L"STUDIE", L"STUDY"));
@@ -517,6 +528,8 @@ void MainFrame::ApplyLanguage() {
     hitList_->SetToolTip(L(
         L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
         L"Double-click a match to open the complete DICOM header for that instance."));
+
+    UpdateSearchModeUi();
 
     if (result_) UpdateStatusSummary();
     else status_->SetLabel(L(L"Bereit.", L"Ready."));
@@ -570,7 +583,7 @@ void MainFrame::ApplyTheme() {
         control->SetBackgroundColour(p.input);
         control->SetForegroundColour(p.text);
     }
-    for (wxChoice* control : {patientChoice_, studyChoice_, languageChoice_, themeChoice_}) {
+    for (wxChoice* control : {patientChoice_, studyChoice_, languageChoice_, themeChoice_, searchModeChoice_}) {
         control->SetBackgroundColour(p.input);
         control->SetForegroundColour(p.text);
     }
@@ -588,6 +601,7 @@ void MainFrame::ApplyTheme() {
              static_cast<wxWindow*>(folder_), static_cast<wxWindow*>(tag_),
              static_cast<wxWindow*>(patientChoice_), static_cast<wxWindow*>(studyChoice_),
              static_cast<wxWindow*>(languageChoice_), static_cast<wxWindow*>(themeChoice_),
+             static_cast<wxWindow*>(searchModeChoice_),
              static_cast<wxWindow*>(browse_), static_cast<wxWindow*>(chooseTag_),
              static_cast<wxWindow*>(start_), static_cast<wxWindow*>(cancel_),
              static_cast<wxWindow*>(showAll_), static_cast<wxWindow*>(export_),
@@ -650,6 +664,32 @@ void MainFrame::OnThemeChanged(wxCommandEvent&) {
     ApplyTheme();
 }
 
+void MainFrame::OnSearchModeChanged(wxCommandEvent&) {
+    UpdateSearchModeUi();
+}
+
+void MainFrame::UpdateSearchModeUi() {
+    const bool tagMode = !searchModeChoice_ || searchModeChoice_->GetSelection() != 1;
+    if (tagMode) {
+        tag_->SetHint(L(L"(0018,1030), 00181030 oder ProtocolName",
+                        L"(0018,1030), 00181030 or ProtocolName"));
+        chooseTag_->Show();
+        tagInfo_->SetLabel(L(L"Tagnummer oder DICOM-Name", L"Tag number or DICOM name"));
+        tagInfo_->SetToolTip(tagInfo_->GetLabel());
+    } else {
+        tag_->SetHint(L(L"z. B. thorax_lowdose, Siemens oder 120",
+                        L"e.g. thorax_lowdose, Siemens or 120"));
+        chooseTag_->Hide();
+        tagInfo_->SetLabel(L(L"Enthält · Groß-/Kleinschreibung wird ignoriert",
+                             L"Contains · case-insensitive"));
+        tagInfo_->SetToolTip(L(
+            L"Durchsucht die Werte aller lesbaren DICOM-Elemente im gesamten Verzeichnisbaum. PixelData und große Binärwerte werden ausgelassen.",
+            L"Searches the values of all readable DICOM elements in the complete folder tree. Pixel Data and large binary values are skipped."));
+    }
+    if (searchCard_) searchCard_->Layout();
+    if (rootPanel_) rootPanel_->Layout();
+}
+
 void MainFrame::OnChooseFolder(wxCommandEvent&) {
     wxDirDialog dialog(this, L(L"DICOM-Studienordner auswählen", L"Select DICOM study folder"),
                        folder_->GetValue(), wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
@@ -685,15 +725,37 @@ void MainFrame::StartScan() {
         return;
     }
 
-    std::string error;
-    auto target = DicomUtils::ParseTag(U8(tag_->GetValue()), error, language_);
-    if (!target) {
-        wxMessageBox(W(error), L(L"Ungültiger DICOM-Tag", L"Invalid DICOM tag"), wxOK | wxICON_WARNING, this);
-        return;
-    }
+    const DicomSearchMode searchMode = searchModeChoice_->GetSelection() == 1
+        ? DicomSearchMode::Value
+        : DicomSearchMode::Tag;
 
-    tagInfo_->SetLabel(W(DicomUtils::TagName(*target)));
-    tagInfo_->SetToolTip(tagInfo_->GetLabel());
+    std::string valueQuery;
+    Uint16 group = 0;
+    Uint16 element = 0;
+    if (searchMode == DicomSearchMode::Tag) {
+        std::string error;
+        auto target = DicomUtils::ParseTag(U8(tag_->GetValue()), error, language_);
+        if (!target) {
+            wxMessageBox(W(error), L(L"Ungültiger DICOM-Tag", L"Invalid DICOM tag"), wxOK | wxICON_WARNING, this);
+            return;
+        }
+        group = target->getGroup();
+        element = target->getElement();
+        tagInfo_->SetLabel(W(DicomUtils::TagName(*target)));
+        tagInfo_->SetToolTip(tagInfo_->GetLabel());
+    } else {
+        valueQuery = U8(tag_->GetValue());
+        const auto first = valueQuery.find_first_not_of(" \t\r\n");
+        const auto last = valueQuery.find_last_not_of(" \t\r\n");
+        if (first == std::string::npos) {
+            wxMessageBox(L(L"Bitte einen Inhalt als Suchbegriff eingeben.", L"Please enter a value to search for."),
+                         L(L"Suchbegriff fehlt", L"Search value missing"), wxOK | wxICON_WARNING, this);
+            return;
+        }
+        valueQuery = valueQuery.substr(first, last - first + 1);
+        tagInfo_->SetLabel(L(L"Enthält · Groß-/Kleinschreibung wird ignoriert",
+                             L"Contains · case-insensitive"));
+    }
     result_.reset();
     selectedPatientKey_.clear();
     selectedStudyKey_.clear();
@@ -711,17 +773,16 @@ void MainFrame::StartScan() {
     cancel_->Enable(true);
     export_->Enable(false);
     languageChoice_->Enable(false);
+    searchModeChoice_->Enable(false);
     cancelRequested_.store(false);
 
     const UiLanguage scanLanguage = language_;
     const std::filesystem::path root(folderText.ToStdWstring());
-    const Uint16 group = target->getGroup();
-    const Uint16 element = target->getElement();
 
-    worker_ = std::thread([this, root, group, element, scanLanguage]() {
+    worker_ = std::thread([this, root, searchMode, group, element, valueQuery, scanLanguage]() {
         try {
             DicomScanner scanner;
-            auto result = scanner.Scan(root, group, element, cancelRequested_, scanLanguage,
+            auto result = scanner.Scan(root, searchMode, group, element, valueQuery, cancelRequested_, scanLanguage,
                 [this, scanLanguage](std::size_t current, std::size_t total, const std::filesystem::path& path) {
                     auto* event = new wxThreadEvent(EVT_SCAN_PROGRESS);
                     event->SetInt(total ? static_cast<int>((current * 100) / total) : 0);
@@ -766,6 +827,7 @@ void MainFrame::OnComplete(wxThreadEvent& event) {
     start_->Enable(true);
     cancel_->Enable(false);
     languageChoice_->Enable(true);
+    searchModeChoice_->Enable(true);
     export_->Enable(result_ && !result_->hits.empty());
     PopulateResult();
 }
@@ -775,6 +837,7 @@ void MainFrame::OnScanError(wxThreadEvent& event) {
     start_->Enable(true);
     cancel_->Enable(false);
     languageChoice_->Enable(true);
+    searchModeChoice_->Enable(true);
     status_->SetLabel(L(L"Fehler.", L"Error."));
     wxMessageBox(event.GetString(), L(L"Fehler beim DICOM-Scan", L"DICOM scan error"), wxOK | wxICON_ERROR, this);
 }
@@ -796,13 +859,13 @@ void MainFrame::UpdateStatusSummary() {
     if (language_ == UiLanguage::German) {
         const wxString state = s.cancelled ? wxString(L"Abgebrochen.") : wxString(L"Fertig.");
         status_->SetLabel(state + wxString::Format(
-            L" %zu DICOM-Dateien, %zu Patienten, %zu Dateien mit Tag, %zu Treffer, %zu Serien, %zu Lesefehler.",
-            s.dicomFiles, result_->patients.size(), s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
+            L" %zu DICOM-Dateien, %zu Patienten, %zu Dateien mit Treffern, %zu Treffer, %zu Serien, %zu Lesefehler.",
+            s.dicomFiles, result_->patients.size(), s.filesWithMatches, s.matches, result_->series.size(), s.readErrors));
     } else {
         const wxString state = s.cancelled ? wxString(L"Cancelled.") : wxString(L"Done.");
         status_->SetLabel(state + wxString::Format(
-            L" %zu DICOM files, %zu patients, %zu files with tag, %zu matches, %zu series, %zu read errors.",
-            s.dicomFiles, result_->patients.size(), s.filesWithTag, s.tagHits, result_->series.size(), s.readErrors));
+            L" %zu DICOM files, %zu patients, %zu files with matches, %zu matches, %zu series, %zu read errors.",
+            s.dicomFiles, result_->patients.size(), s.filesWithMatches, s.matches, result_->series.size(), s.readErrors));
     }
 }
 
@@ -1089,7 +1152,7 @@ void MainFrame::ExportCsv() {
     if (!result_ || result_->hits.empty()) return;
 
     wxFileDialog dialog(this, L(L"Treffer als CSV speichern", L"Save matches as CSV"), wxEmptyString,
-                        wxString(L"dicom_tag_matches.csv"), wxString(L"CSV (*.csv)|*.csv"),
+                        wxString(L"dicom_matches.csv"), wxString(L"CSV (*.csv)|*.csv"),
                         wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dialog.ShowModal() != wxID_OK) return;
 

@@ -4,11 +4,43 @@
 #include <dcmtk/dcmdata/dcdeftag.h>
 #include <dcmtk/dcmdata/dcfilefo.h>
 #include <dcmtk/dcmdata/dcmetinf.h>
+#include <dcmtk/dcmdata/dcelem.h>
+#include <dcmtk/dcmdata/dcsequen.h>
 
 #include <algorithm>
 #include <system_error>
 
+#include <wx/string.h>
+
 namespace {
+
+
+bool ContainsCaseInsensitiveUtf8(const std::string& value, const std::string& query) {
+    if (query.empty()) return false;
+    wxString haystack = wxString::FromUTF8(value.c_str());
+    wxString needle = wxString::FromUTF8(query.c_str());
+    haystack.MakeLower();
+    needle.MakeLower();
+    return haystack.Find(needle) != wxNOT_FOUND;
+}
+
+bool TryGetSearchableValue(DcmObject* object, std::string& value) {
+    value.clear();
+    if (!object || object->getTag().getTagKey() == DCM_PixelData) return false;
+    if (dynamic_cast<DcmSequenceOfItems*>(object)) return false;
+
+    auto* element = dynamic_cast<DcmElement*>(object);
+    if (!element) return false;
+
+    // Do not pull large binary/deferred values into memory for a text search.
+    constexpr Uint32 kMaxSearchValue = 1024 * 1024;
+    if (element->getLength() == 0 || element->getLength() > kMaxSearchValue) return false;
+
+    OFString text;
+    if (element->getOFStringArray(text).bad()) return false;
+    value = text.c_str();
+    return !value.empty();
+}
 
 bool LooksLikeDicom(DcmFileFormat& file) {
     DcmDataset* ds = file.getDataset();
@@ -159,12 +191,62 @@ void CollectMatches(
     }
 }
 
+void CollectValueMatches(
+    DcmItem* container,
+    const std::string& query,
+    const std::string& pathPrefix,
+    const std::filesystem::path& root,
+    const std::filesystem::path& file,
+    DcmDataset* ds,
+    const std::string& patientKey,
+    const std::string& studyKey,
+    const std::string& seriesKey,
+    std::uintmax_t fileSize,
+    UiLanguage language,
+    std::vector<ScanHit>& hits)
+{
+    if (!container || query.empty()) return;
+
+    DcmStack stack;
+    while (container->nextObject(stack, OFTrue).good()) {
+        DcmObject* obj = stack.top();
+        std::string searchableValue;
+        if (!TryGetSearchableValue(obj, searchableValue)) continue;
+        if (!ContainsCaseInsensitiveUtf8(searchableValue, query)) continue;
+
+        const DcmTagKey key = obj->getTag().getTagKey();
+        ScanHit hit;
+        hit.patientKey = patientKey;
+        hit.studyKey = studyKey;
+        hit.seriesKey = seriesKey;
+        hit.seriesNumber = DicomUtils::GetString(ds, DCM_SeriesNumber);
+        hit.instanceNumber = DicomUtils::GetString(ds, DCM_InstanceNumber);
+        hit.modality = DicomUtils::GetString(ds, DCM_Modality);
+        hit.tag = DicomUtils::FormatTag(key);
+        hit.tagName = DicomUtils::TagName(key);
+        hit.vr = DcmVR(obj->getVR()).getVRName();
+        hit.value = DicomUtils::SafeElementValue(obj, language);
+        hit.sequencePath = DicomUtils::SequencePath(stack, pathPrefix);
+
+        std::error_code ec;
+        const auto relative = std::filesystem::relative(file, root, ec);
+        hit.relativeFile = DicomUtils::ToUtf8Path(ec ? file.filename() : relative);
+        hit.fullFile = DicomUtils::ToUtf8Path(file);
+        hit.sopInstanceUid = DicomUtils::GetString(ds, DCM_SOPInstanceUID);
+        hit.instanceSizeBytes = fileSize;
+        hits.push_back(std::move(hit));
+    }
+}
+
+
 } // namespace
 
 std::shared_ptr<ScanResult> DicomScanner::Scan(
     const std::filesystem::path& root,
+    DicomSearchMode mode,
     uint16_t group,
     uint16_t element,
+    const std::string& valueQuery,
     std::atomic_bool& cancel,
     UiLanguage language,
     ProgressCallback progress)
@@ -217,19 +299,30 @@ std::shared_ptr<ScanResult> DicomScanner::Scan(
         SeriesInfo& series = GetSeries(*result, ds, file, patient.patientKey, study.studyKey, safeFileSize);
 
         const std::size_t before = result->hits.size();
-        CollectMatches(ds, target, {}, root, file, ds,
-                       patient.patientKey, study.studyKey, series.seriesKey,
-                       safeFileSize, language, result->hits);
-        CollectMatches(dcm.getMetaInfo(), target,
-                       language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information",
-                       root, file, ds,
-                       patient.patientKey, study.studyKey, series.seriesKey,
-                       safeFileSize, language, result->hits);
+        if (mode == DicomSearchMode::Tag) {
+            CollectMatches(ds, target, {}, root, file, ds,
+                           patient.patientKey, study.studyKey, series.seriesKey,
+                           safeFileSize, language, result->hits);
+            CollectMatches(dcm.getMetaInfo(), target,
+                           language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information",
+                           root, file, ds,
+                           patient.patientKey, study.studyKey, series.seriesKey,
+                           safeFileSize, language, result->hits);
+        } else {
+            CollectValueMatches(ds, valueQuery, {}, root, file, ds,
+                                patient.patientKey, study.studyKey, series.seriesKey,
+                                safeFileSize, language, result->hits);
+            CollectValueMatches(dcm.getMetaInfo(), valueQuery,
+                                language == UiLanguage::German ? "Datei-Metainformationen" : "File Meta Information",
+                                root, file, ds,
+                                patient.patientKey, study.studyKey, series.seriesKey,
+                                safeFileSize, language, result->hits);
+        }
         const std::size_t added = result->hits.size() - before;
 
         if (added > 0) {
-            ++result->stats.filesWithTag;
-            result->stats.tagHits += added;
+            ++result->stats.filesWithMatches;
+            result->stats.matches += added;
             series.hits += added;
         }
     }

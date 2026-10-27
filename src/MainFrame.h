@@ -31,6 +31,7 @@ private:
     void BindEvents();
     void ApplyLanguage();
     void ApplyTheme();
+    void UpdateSearchModeUi();
     void ApplyNativeChrome();
     void ApplyListRowTheme(wxListCtrl* list);
     void StartScan();
@@ -57,6 +58,7 @@ private:
     void OnExport(wxCommandEvent& event);
     void OnLanguageChanged(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
+    void OnSearchModeChanged(wxCommandEvent& event);
     void OnPatientChanged(wxCommandEvent& event);
     void OnStudyChanged(wxCommandEvent& event);
     void OnSeriesSelected(wxListEvent& event);
@@ -90,6 +92,7 @@ private:
     wxButton* browse_{};
 
     wxStaticText* tagTitle_{};
+    wxChoice* searchModeChoice_{};
     wxTextCtrl* tag_{};
     wxButton* chooseTag_{};
     wxStaticText* tagInfo_{};

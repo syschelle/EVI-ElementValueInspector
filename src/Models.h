@@ -73,8 +73,8 @@ struct ScanHit {
 struct ScanStats {
     std::size_t totalFiles{};
     std::size_t dicomFiles{};
-    std::size_t filesWithTag{};
-    std::size_t tagHits{};
+    std::size_t filesWithMatches{};
+    std::size_t matches{};
     std::size_t readErrors{};
     bool cancelled{};
 };

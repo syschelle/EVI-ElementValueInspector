@@ -1,14 +1,19 @@
 # ElementValueInspector (EVI)
 
-ElementValueInspector (EVI) is a native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements across studies, series, instances, file meta information, and nested sequences.
+ElementValueInspector (EVI) is a native Windows application for inspecting complete DICOM studies and locating specific DICOM data elements or matching text inside DICOM element values across studies, series, instances, file meta information, and nested sequences.
 
 EVI is designed as a lightweight local inspection tool. It does not require a PACS connection and does not upload DICOM data to any external service.
 
 ## What EVI does
 
-EVI scans a selected study folder recursively, identifies DICOM files, builds a study and series overview, and searches every readable DICOM instance for a selected data element.
+EVI scans a selected study folder recursively, identifies DICOM files, builds a patient/study/series overview, and can search every readable DICOM instance either for a selected data element or for text contained in DICOM element values.
 
-A search can be started with a manually entered tag or with a tag selected from the built-in DICOM dictionary.
+The main search offers two independent modes:
+
+- **DICOM tag** searches for one specific element by tag number or DICOM name.
+- **Value** searches the values of all readable DICOM elements for a text fragment. Value matching is case-insensitive and uses substring matching, so `lowdose` also matches values such as `Thorax_LowDose`.
+
+A tag search can be started with a manually entered tag or with a tag selected from the built-in DICOM dictionary.
 
 Supported manual tag formats include:
 
@@ -19,6 +24,12 @@ ProtocolName
 ```
 
 Numerical tag entry also allows private or vendor-specific tags to be inspected even when they are not part of the standard dictionary.
+
+### Value/content search
+
+In **Value** mode, EVI traverses the readable elements of the complete dataset, nested sequences, and File Meta Information and returns the concrete DICOM elements whose displayed value contains the search text. Matching is case-insensitive. The result list still shows the actual tag number, tag name, VR, value, sequence path, series, and instance that produced each match.
+
+Pixel Data, sequence container placeholders, and large binary/deferred values are deliberately excluded from content matching to keep scans responsive and to avoid treating binary data as text.
 
 ## DICOM tag browser
 
@@ -36,9 +47,9 @@ The selected tag is transferred directly into the main search field.
 
 ## Patient, study, and series overview
 
-EVI scans the complete selected folder tree in a single pass, even when the directory contains DICOM data from multiple patients. After scanning, the result view can be switched between the detected patients without running the tag search again.
+EVI scans the complete selected folder tree in a single pass, even when the directory contains DICOM data from multiple patients. After scanning, the result view can be switched between the detected patients without running the main search again.
 
-For a patient with more than one study, a separate study selector keeps the series and instance view unambiguous. The patient and study selectors only filter the already collected results; they never change the original tag search or limit which folders are scanned.
+For a patient with more than one study, a separate study selector keeps the series and instance view unambiguous. The patient and study selectors only filter the already collected results; they never change the original main search or limit which folders are scanned.
 
 The compact study strip displays:
 
@@ -64,7 +75,7 @@ The series overview includes:
 - total DICOM size of the series
 - Series Instance UID
 
-All detected series of the selected patient and study are shown, including series that do not contain the requested tag.
+All detected series of the selected patient and study are shown, including series that do not contain a match for the current search.
 
 ## Match details
 
@@ -105,13 +116,13 @@ The header window has its own search field. It can locate elements by:
 - displayed value
 - sequence path
 
-Repeated **Find next** actions cycle through all matches inside the current instance. This secondary search is local to the header window and never replaces or modifies the tag used for the main study scan.
+Repeated **Find next** actions cycle through all matches inside the current instance. This secondary search is local to the header window and never replaces or modifies the search used for the main folder scan.
 
 Large binary values and Pixel Data remain omitted from textual display so that the inspector stays responsive on large imaging objects.
 
 ## Nested sequences and file meta information
 
-The dataset traversal is recursive. EVI can therefore locate the requested tag inside nested DICOM sequences instead of searching only the dataset root.
+The dataset traversal is recursive. EVI can therefore locate requested tags and content matches inside nested DICOM sequences instead of searching only the dataset root.
 
 File Meta Information is searched as well, allowing `(0002,xxxx)` elements to be inspected.
 
@@ -136,7 +147,7 @@ The interface uses Unicode throughout and explicitly enables UTF-8 at the Window
 
 ## CSV export
 
-Search results can be exported as a UTF-8 CSV file. The export contains patient, study, series, instance, tag, value, sequence-path, source-file, and exact byte-size information for studies, series, and instances.
+Main-search results can be exported as a UTF-8 CSV file. The export contains patient, study, series, instance, tag, value, sequence-path, source-file, and exact byte-size information for studies, series, and instances.
 
 Because exported files can contain patient information, exported CSV files should be handled according to the same privacy and security requirements as the source DICOM data.
 
