@@ -70,7 +70,7 @@ Palette BuildThemePalette(UiTheme theme) {
             wxColour(24, 27, 32),
             wxColour(31, 35, 41),
             wxColour(28, 32, 38),
-            wxColour(34, 39, 46),
+            wxColour(38, 44, 52),
             wxColour(42, 47, 55),
             wxColour(235, 238, 242),
             wxColour(164, 173, 184),
@@ -79,10 +79,10 @@ Palette BuildThemePalette(UiTheme theme) {
         };
     }
     return {
-        wxColour(244, 246, 249),
+        wxColour(240, 243, 247),
         wxColour(255, 255, 255),
         wxColour(255, 255, 255),
-        wxColour(248, 250, 252),
+        wxColour(240, 244, 248),
         wxColour(255, 255, 255),
         wxColour(30, 35, 42),
         wxColour(100, 109, 120),
@@ -218,7 +218,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.23"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.24"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -453,7 +453,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.23"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.24"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",

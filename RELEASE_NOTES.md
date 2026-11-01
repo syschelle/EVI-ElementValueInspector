@@ -1,18 +1,12 @@
-# EVI v0.2.23 Release Notes
+# EVI v0.2.24 Release Notes
 
-This release extends the main DICOM scan beyond tag-only searches.
+## Header readability
 
-## New
+- Added alternating row backgrounds to the hierarchical DICOM Header Inspector.
+- Kept sequence grouping, expand/collapse behaviour, automatic hit navigation and local header search unchanged.
+- Increased the contrast of alternating rows in the main series and result tables.
+- Darkened the light-mode neutral background slightly for clearer separation between cards and data tables.
 
-- **DICOM tag** search remains available exactly as before.
-- **Value** search finds text contained in any readable DICOM element value.
-- Value matching is case-insensitive and uses substring matching.
-- Matches inside nested sequences and File Meta Information are included.
-- Results identify the concrete tag and instance that contains the matching value.
+## Application
 
-## Search safety and performance
-
-- Pixel Data is never searched as text.
-- Sequence container placeholders are not treated as content.
-- Large binary/deferred values are skipped during value matching.
-- All processing remains local.
+EVI remains a native C++20 Windows application using DCMTK and wxWidgets. The release build produces the portable `evi.exe` and its SHA-256 checksum.

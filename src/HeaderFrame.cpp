@@ -10,6 +10,7 @@
 #include <dcmtk/dcmdata/dcsequen.h>
 
 #include <wx/button.h>
+#include <wx/dataview.h>
 #include <wx/font.h>
 #include <wx/msgdlg.h>
 #include <wx/panel.h>
@@ -160,6 +161,12 @@ void HeaderFrame::BuildUi() {
     root->Add(hint_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
 
     tree_ = new wxTreeListCtrl(rootPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTL_DEFAULT_STYLE);
+    // wxTreeListCtrl uses wxDataViewCtrl internally. Enable its native row-line
+    // mode so visible rows are zebra-striped while keeping the hierarchical
+    // sequence tree and all existing expand/collapse behaviour.
+    if (wxDataViewCtrl* dataView = tree_->GetDataView()) {
+        dataView->SetWindowStyleFlag(dataView->GetWindowStyleFlag() | wxDV_ROW_LINES);
+    }
     tree_->AppendColumn(wxString(L"Tag"), 180, wxALIGN_LEFT, wxCOL_RESIZABLE);
     tree_->AppendColumn(L(L"Name", L"Name"), 280, wxALIGN_LEFT, wxCOL_RESIZABLE);
     tree_->AppendColumn(wxString(L"VR"), 65, wxALIGN_LEFT, wxCOL_RESIZABLE);
@@ -437,7 +444,7 @@ void HeaderFrame::OnFindNext(wxCommandEvent&) {
 
 void HeaderFrame::ApplyTheme() {
     const bool dark = theme_ == UiTheme::Dark;
-    const wxColour background = dark ? wxColour(24, 27, 32) : wxColour(244, 246, 249);
+    const wxColour background = dark ? wxColour(24, 27, 32) : wxColour(240, 243, 247);
     const wxColour table = dark ? wxColour(28, 32, 38) : wxColour(255, 255, 255);
     const wxColour input = dark ? wxColour(42, 47, 55) : wxColour(255, 255, 255);
     const wxColour text = dark ? wxColour(235, 238, 242) : wxColour(30, 35, 42);
@@ -455,10 +462,18 @@ void HeaderFrame::ApplyTheme() {
     search_->SetForegroundColour(text);
     tree_->SetBackgroundColour(table);
     tree_->SetForegroundColour(text);
+    if (wxDataViewCtrl* dataView = tree_->GetDataView()) {
+        dataView->SetBackgroundColour(table);
+        dataView->SetForegroundColour(text);
+        dataView->Refresh();
+    }
 
 #ifdef _WIN32
     if (tree_->GetHandle()) {
         SetWindowTheme(reinterpret_cast<HWND>(tree_->GetHandle()), dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    }
+    if (wxDataViewCtrl* dataView = tree_->GetDataView(); dataView && dataView->GetHandle()) {
+        SetWindowTheme(reinterpret_cast<HWND>(dataView->GetHandle()), dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
     }
     ApplyNativeDarkMode(this, dark);
 #endif
