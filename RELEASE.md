@@ -1,15 +1,14 @@
-# EVI v0.2.27
+# EVI v0.2.28
 
-This release adds SOP Class identification to the main match and instance view.
+This release improves column sizing in the match and instance view.
 
 ## Changes
 
-- Added **SOP Class UID** for each matching DICOM instance.
-- Added a readable **SOP Class** column resolved through DCMTK's built-in DICOM UID registry.
-- Known standard classes can therefore be shown by name, for example `CT Image Storage`, while the original UID remains visible.
-- Unknown or private SOP Class UIDs remain visible and are marked as unknown/private in the UI.
-- Added SOP Class UID and resolved name to CSV exports.
-- Existing tag/value search, patient/study filtering, DICOM Header Inspector and clipboard functions remain unchanged.
+- Match/instance columns now size themselves to the actual displayed content.
+- Every column also respects the width of its complete header label, so headers such as `Modalität` / `Modality` are never clipped just because the cell values are shorter.
+- Column widths are recalculated after scan results are populated and after the UI language changes.
+- Long paths and UIDs can still expand the table naturally; horizontal scrolling remains available when required.
+- Existing SOP Class information, DICOM Header Inspector, search modes and clipboard functions remain unchanged.
 
 ## Windows executable
 

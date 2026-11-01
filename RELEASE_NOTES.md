@@ -1,8 +1,7 @@
-# EVI v0.2.27 Release Notes
+# EVI v0.2.28 Release Notes
 
-## SOP Class information
+## Content-aware match table columns
 
-- The match/instance table now includes the SOP Class UID for every DICOM instance.
-- EVI resolves known SOP Class UIDs to readable names using DCMTK's built-in UID registry.
-- Unknown/private SOP Class UIDs remain visible and are clearly identified.
-- CSV export now includes `SOPClassUID` and `SOPClassName`.
+- Match and instance columns automatically fit their displayed cell contents.
+- Column headers define the minimum required width, preventing translated labels from being clipped.
+- Widths are refreshed after results are loaded and whenever the UI language changes.

@@ -50,6 +50,7 @@ private:
     void ExportCsv();
     wxString L(const wchar_t* de, const wchar_t* en) const;
     void SetColumnTitle(wxListCtrl* list, int column, const wxString& title);
+    void AutoSizeHitColumns();
     void SetStudyValue(wxStaticText* label, const std::string& value);
     bool CopyTextToClipboard(const wxString& text);
 

@@ -232,7 +232,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.27"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.28"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -473,8 +473,26 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
     list->SetColumn(column, item);
 }
 
+void MainFrame::AutoSizeHitColumns() {
+    if (!hitList_) return;
+
+    const int columnCount = hitList_->GetColumnCount();
+    for (int column = 0; column < columnCount; ++column) {
+        // First measure the widest cell value currently present.
+        hitList_->SetColumnWidth(column, wxLIST_AUTOSIZE);
+        const int contentWidth = hitList_->GetColumnWidth(column);
+
+        // Then measure the header. This prevents labels such as "Modalität" /
+        // "Modality" from being clipped when their values are shorter.
+        hitList_->SetColumnWidth(column, wxLIST_AUTOSIZE_USEHEADER);
+        const int headerWidth = hitList_->GetColumnWidth(column);
+
+        hitList_->SetColumnWidth(column, std::max(contentWidth, headerWidth));
+    }
+}
+
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.27"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.28"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -550,6 +568,7 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(hitList_, 10, wxString(L"SOP Instance UID"));
     SetColumnTitle(hitList_, 11, L(L"SOP-Klasse", L"SOP Class"));
     SetColumnTitle(hitList_, 12, wxString(L"SOP Class UID"));
+    AutoSizeHitColumns();
 
     hitList_->SetToolTip(L(
         L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
@@ -1131,6 +1150,7 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         visibleHitIndices_.push_back(hitIndex);
     }
     ApplyListRowTheme(hitList_);
+    AutoSizeHitColumns();
     hitList_->Thaw();
 }
 

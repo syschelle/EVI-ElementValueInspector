@@ -264,3 +264,5 @@ EVI is distributed as a native Windows executable with an embedded multi-resolut
 ## Readability
 
 The series, result and hierarchical DICOM header views use alternating row backgrounds to make dense metadata easier to follow. Light and dark themes are supported.
+
+The match/instance table automatically sizes columns to their contents while keeping every complete column header visible.
