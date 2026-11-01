@@ -118,6 +118,8 @@ The header window has its own search field. It can locate elements by:
 
 Repeated **Find next** actions cycle through all matches inside the current instance. This secondary search is local to the header window and never replaces or modifies the search used for the main folder scan.
 
+Multi-line DICOM values are displayed using variable row heights, so embedded line breaks remain fully visible instead of being clipped. Header cells also support direct clipboard copy: right-click a **Tag**, **Name**, **Value**, or **Sequence Path** cell and choose the copy action, or focus a cell and press **Ctrl+C**. The **VR** column is intentionally display-only and is not copied.
+
 Large binary values and Pixel Data remain omitted from textual display so that the inspector stays responsive on large imaging objects.
 
 ## Nested sequences and file meta information

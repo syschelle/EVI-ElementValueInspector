@@ -1,11 +1,19 @@
-# EVI v0.2.24 Release Notes
+# EVI v0.2.25 Release Notes
 
-## Header readability
+## DICOM Header Inspector
 
-- Added alternating row backgrounds to the hierarchical DICOM Header Inspector.
-- Kept sequence grouping, expand/collapse behaviour, automatic hit navigation and local header search unchanged.
-- Increased the contrast of alternating rows in the main series and result tables.
-- Darkened the light-mode neutral background slightly for clearer separation between cards and data tables.
+- Added dynamic row heights for multi-line DICOM values.
+- Values containing embedded line breaks are now fully visible without overlapping or clipping adjacent rows.
+- Added context-sensitive clipboard copy for Tag, Name, Value and Sequence Path cells.
+- Added `Ctrl+C` support for the currently focused header cell.
+- VR remains display-only and is intentionally excluded from clipboard copy.
+
+## Existing behaviour retained
+
+- Hierarchical sequence grouping and expand/collapse behaviour are unchanged.
+- Alternating row backgrounds remain enabled.
+- Header-local search still does not modify the main study search.
+- Opening a header from a study-search result still navigates directly to the originating DICOM element.
 
 ## Application
 

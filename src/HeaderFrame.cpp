@@ -10,8 +10,11 @@
 #include <dcmtk/dcmdata/dcsequen.h>
 
 #include <wx/button.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
 #include <wx/dataview.h>
 #include <wx/font.h>
+#include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
@@ -25,8 +28,11 @@
 #endif
 
 #include <algorithm>
+#include <array>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -68,6 +74,127 @@ std::string JoinPath(const std::string& left, const std::string& right) {
     if (right.empty()) return left;
     return left + " > " + right;
 }
+
+class MultiLineTextRenderer final : public wxDataViewCustomRenderer {
+public:
+    MultiLineTextRenderer()
+        : wxDataViewCustomRenderer("string", wxDATAVIEW_CELL_INERT, wxALIGN_LEFT | wxALIGN_TOP) {}
+
+    bool Render(wxRect rect, wxDC* dc, int state) override {
+        rect.Deflate(GetView()->FromDIP(4), GetView()->FromDIP(2));
+        RenderText(value_, 0, rect, dc, state);
+        return true;
+    }
+
+    wxSize GetSize() const override {
+        wxString text = value_;
+        text.Replace("\r\n", "\n");
+        text.Replace("\r", "\n");
+
+        const int lineCount = std::max(1, static_cast<int>(text.Freq('\n')) + 1);
+        wxSize size = GetTextExtent(text.empty() ? wxString(L" ") : text);
+        const int baseLineHeight = std::max(GetTextExtent(wxString(L"Ag")).GetHeight(), size.GetHeight());
+        size.SetHeight(baseLineHeight * lineCount + GetView()->FromDIP(6));
+        size.SetWidth(size.GetWidth() + GetView()->FromDIP(8));
+        return size;
+    }
+
+    bool SetValue(const wxVariant& value) override {
+        value_ = value.GetString();
+        value_.Replace("\r\n", "\n");
+        value_.Replace("\r", "\n");
+        return true;
+    }
+
+    bool GetValue(wxVariant& value) const override {
+        value = value_;
+        return true;
+    }
+
+#if wxUSE_ACCESSIBILITY
+    wxString GetAccessibleDescription() const override {
+        return value_;
+    }
+#endif
+
+private:
+    wxString value_;
+};
+
+struct HeaderTreeNode {
+    HeaderTreeNode* parent{};
+    std::vector<std::unique_ptr<HeaderTreeNode>> children;
+    std::array<wxString, 5> cells;
+    bool forceContainer{};
+};
+
+class HeaderTreeModel final : public wxDataViewModel {
+public:
+    HeaderTreeModel()
+        : root_(std::make_unique<HeaderTreeNode>()) {
+        root_->forceContainer = true;
+    }
+
+    HeaderTreeNode* Append(HeaderTreeNode* parent,
+                           std::array<wxString, 5> cells,
+                           bool forceContainer = false) {
+        if (!parent) parent = root_.get();
+        auto node = std::make_unique<HeaderTreeNode>();
+        node->parent = parent;
+        node->cells = std::move(cells);
+        node->forceContainer = forceContainer;
+        HeaderTreeNode* raw = node.get();
+        parent->children.push_back(std::move(node));
+        return raw;
+    }
+
+    HeaderTreeNode* Root() const { return root_.get(); }
+
+    unsigned int GetColumnCount() const override { return 5; }
+
+    wxString GetColumnType(unsigned int) const override { return wxString(L"string"); }
+
+    void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override {
+        const auto* node = Node(item);
+        if (!node || col >= node->cells.size()) {
+            variant = wxString{};
+            return;
+        }
+        variant = node->cells[col];
+    }
+
+    bool SetValue(const wxVariant&, const wxDataViewItem&, unsigned int) override { return false; }
+
+    bool IsContainer(const wxDataViewItem& item) const override {
+        if (!item.IsOk()) return true;
+        const auto* node = Node(item);
+        return node && (node->forceContainer || !node->children.empty());
+    }
+
+    bool HasContainerColumns(const wxDataViewItem&) const override { return true; }
+
+    wxDataViewItem GetParent(const wxDataViewItem& item) const override {
+        const auto* node = Node(item);
+        if (!node || !node->parent || node->parent == root_.get()) return wxDataViewItem{};
+        return wxDataViewItem(node->parent);
+    }
+
+    unsigned int GetChildren(const wxDataViewItem& item, wxDataViewItemArray& children) const override {
+        const HeaderTreeNode* node = item.IsOk() ? Node(item) : root_.get();
+        if (!node) return 0;
+        for (const auto& child : node->children) {
+            children.Add(wxDataViewItem(child.get()));
+        }
+        return static_cast<unsigned int>(node->children.size());
+    }
+
+private:
+    static HeaderTreeNode* Node(const wxDataViewItem& item) {
+        return item.IsOk() ? static_cast<HeaderTreeNode*>(item.GetID()) : nullptr;
+    }
+
+    std::unique_ptr<HeaderTreeNode> root_;
+};
 
 #ifdef _WIN32
 void ApplyNativeDarkMode(wxWindow* window, bool dark) {
@@ -156,22 +283,30 @@ void HeaderFrame::BuildUi() {
     root->Add(searchRow, 0, wxEXPAND | wxLEFT | wxRIGHT, 18);
 
     hint_ = new wxStaticText(rootPanel_, wxID_ANY,
-        L(L"Sequenzen sind gruppiert und aufklappbar. Die Suche gilt nur für dieses Header-Fenster und verändert die ursprüngliche Studiensuche nicht.",
-          L"Sequences are grouped and expandable. This search applies only to this header window and never changes the original study search."));
+        L(L"Sequenzen sind gruppiert und aufklappbar. Mehrzeilige Werte vergrößern ihre Zeile automatisch. Rechtsklick oder Strg+C kopiert die aktuelle Zelle (außer VR).",
+          L"Sequences are grouped and expandable. Multi-line values automatically increase their row height. Right-click or Ctrl+C copies the current cell (except VR)."));
     root->Add(hint_, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 18);
 
-    tree_ = new wxTreeListCtrl(rootPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTL_DEFAULT_STYLE);
-    // wxTreeListCtrl uses wxDataViewCtrl internally. Enable its native row-line
-    // mode so visible rows are zebra-striped while keeping the hierarchical
-    // sequence tree and all existing expand/collapse behaviour.
-    if (wxDataViewCtrl* dataView = tree_->GetDataView()) {
-        dataView->SetWindowStyleFlag(dataView->GetWindowStyleFlag() | wxDV_ROW_LINES);
-    }
-    tree_->AppendColumn(wxString(L"Tag"), 180, wxALIGN_LEFT, wxCOL_RESIZABLE);
-    tree_->AppendColumn(L(L"Name", L"Name"), 280, wxALIGN_LEFT, wxCOL_RESIZABLE);
-    tree_->AppendColumn(wxString(L"VR"), 65, wxALIGN_LEFT, wxCOL_RESIZABLE);
-    tree_->AppendColumn(L(L"Wert", L"Value"), 470, wxALIGN_LEFT, wxCOL_RESIZABLE);
-    tree_->AppendColumn(L(L"Sequence-Pfad", L"Sequence path"), 360, wxALIGN_LEFT, wxCOL_RESIZABLE);
+    tree_ = new wxDataViewCtrl(rootPanel_, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                               wxDV_ROW_LINES | wxDV_VARIABLE_LINE_HEIGHT);
+
+    auto* tagColumn = new wxDataViewColumn(wxString(L"Tag"),
+        new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_INERT),
+        0, 180, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
+    tree_->AppendColumn(tagColumn);
+    tree_->AppendColumn(new wxDataViewColumn(L(L"Name", L"Name"),
+        new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_INERT),
+        1, 280, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE));
+    tree_->AppendColumn(new wxDataViewColumn(wxString(L"VR"),
+        new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_INERT),
+        2, 65, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE));
+    tree_->AppendColumn(new wxDataViewColumn(L(L"Wert", L"Value"),
+        new MultiLineTextRenderer(),
+        3, 470, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE));
+    tree_->AppendColumn(new wxDataViewColumn(L(L"Sequence-Pfad", L"Sequence path"),
+        new wxDataViewTextRenderer("string", wxDATAVIEW_CELL_INERT),
+        4, 360, wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE));
+    tree_->SetExpanderColumn(tagColumn);
     root->Add(tree_, 1, wxEXPAND | wxLEFT | wxRIGHT, 18);
 
     status_ = new wxStaticText(rootPanel_, wxID_ANY, wxEmptyString);
@@ -181,12 +316,13 @@ void HeaderFrame::BuildUi() {
 
     search_->Bind(wxEVT_TEXT_ENTER, &HeaderFrame::OnSearch, this);
     findNext_->Bind(wxEVT_BUTTON, &HeaderFrame::OnFindNext, this);
+    tree_->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &HeaderFrame::OnContextMenu, this);
+    Bind(wxEVT_MENU, &HeaderFrame::OnCopyCell, this, wxID_COPY);
+    Bind(wxEVT_CHAR_HOOK, &HeaderFrame::OnCharHook, this);
 }
 
 void HeaderFrame::LoadHeader() {
     DcmFileFormat dcm;
-    // Read metadata values up to 1 MiB directly. Larger binary values and Pixel Data
-    // remain deferred/omitted by SafeElementValue().
     OFCondition status = DicomUtils::LoadDicomFile(dcm, filePath_, 1024U * 1024U);
     if (status.bad()) {
         throw std::runtime_error(status.text());
@@ -209,8 +345,6 @@ void HeaderFrame::CollectRows(DcmItem* container, const std::string& prefix, boo
     while (container->nextObject(stack, OFTrue).good()) {
         DcmObject* object = stack.top();
         if (!object) continue;
-
-        // Items are traversal containers rather than DICOM data elements.
         if (dynamic_cast<DcmElement*>(object) == nullptr) continue;
 
         const DcmTagKey key = object->getTag().getTagKey();
@@ -230,17 +364,18 @@ void HeaderFrame::CollectRows(DcmItem* container, const std::string& prefix, boo
 
 void HeaderFrame::PopulateTree() {
     tree_->Freeze();
-    tree_->DeleteAllItems();
-    rowItems_.assign(rows_.size(), wxTreeListItem{});
+    rowItems_.assign(rows_.size(), wxDataViewItem{});
 
-    const wxTreeListItem root = tree_->GetRootItem();
-    const wxTreeListItem datasetRoot = tree_->AppendItem(root, L(L"Datensatz", L"Dataset"));
-    const wxTreeListItem metaRoot = tree_->AppendItem(root, L(L"Datei-Metainformationen", L"File Meta Information"));
+    auto* model = new HeaderTreeModel();
+    HeaderTreeNode* datasetRootNode = model->Append(nullptr,
+        {L(L"Datensatz", L"Dataset"), L(L"DICOM-Datensatz", L"DICOM dataset"), wxString{}, wxString{}, wxString{}},
+        true);
+    HeaderTreeNode* metaRootNode = model->Append(nullptr,
+        {L(L"Datei-Metainformationen", L"File Meta Information"),
+         L(L"Dateiheader (0002,xxxx)", L"File header (0002,xxxx)"), wxString{}, wxString{}, wxString{}},
+        true);
 
-    tree_->SetItemText(datasetRoot, 1, L(L"DICOM-Datensatz", L"DICOM dataset"));
-    tree_->SetItemText(metaRoot, 1, L(L"Dateiheader (0002,xxxx)", L"File header (0002,xxxx)"));
-
-    std::unordered_map<std::string, wxTreeListItem> sequenceNodes;
+    std::unordered_map<std::string, HeaderTreeNode*> sequenceNodes;
 
     const std::string metaPrefix = language_ == UiLanguage::German
         ? "Datei-Metainformationen"
@@ -260,7 +395,7 @@ void HeaderFrame::PopulateTree() {
     };
 
     auto ensureSequencePath = [&](bool fileMeta, const std::string& path) {
-        wxTreeListItem parent = fileMeta ? metaRoot : datasetRoot;
+        HeaderTreeNode* parent = fileMeta ? metaRootNode : datasetRootNode;
         if (path.empty()) return parent;
 
         std::string cumulative;
@@ -274,11 +409,9 @@ void HeaderFrame::PopulateTree() {
                 continue;
             }
 
-            // Normally the sequence element itself is encountered before its children.
-            // A placeholder keeps malformed/unusual traversal orders grouped correctly.
-            const wxTreeListItem placeholder = tree_->AppendItem(parent, W(part));
-            tree_->SetItemText(placeholder, 1, L(L"Sequenz", L"Sequence"));
-            tree_->SetItemText(placeholder, 2, wxString(L"SQ"));
+            HeaderTreeNode* placeholder = model->Append(parent,
+                {W(part), L(L"Sequenz", L"Sequence"), wxString(L"SQ"), wxString{}, W(cumulative)},
+                true);
             sequenceNodes.emplace(key, placeholder);
             parent = placeholder;
         }
@@ -288,40 +421,40 @@ void HeaderFrame::PopulateTree() {
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         const HeaderRow& row = rows_[i];
         const std::string relativePath = relativeSequencePath(row);
-        wxTreeListItem parent = ensureSequencePath(row.fileMeta, relativePath);
+        HeaderTreeNode* parent = ensureSequencePath(row.fileMeta, relativePath);
 
         if (row.sequence) {
             const std::string sequenceComponent = row.tag + " " + row.name;
             const std::string fullPath = JoinPath(relativePath, sequenceComponent);
             const std::string key = std::string(1, row.fileMeta ? 'M' : 'D') + "|" + fullPath;
 
-            wxTreeListItem item;
+            HeaderTreeNode* node = nullptr;
             const auto existing = sequenceNodes.find(key);
             if (existing != sequenceNodes.end()) {
-                item = existing->second;
-                tree_->SetItemText(item, 0, W(row.tag));
+                node = existing->second;
+                node->cells = {W(row.tag), W(row.name), W(row.vr), W(row.value), W(row.sequencePath)};
+                node->forceContainer = true;
             } else {
-                item = tree_->AppendItem(parent, W(row.tag));
-                sequenceNodes.emplace(key, item);
+                node = model->Append(parent,
+                    {W(row.tag), W(row.name), W(row.vr), W(row.value), W(row.sequencePath)},
+                    true);
+                sequenceNodes.emplace(key, node);
             }
 
-            tree_->SetItemText(item, 1, W(row.name));
-            tree_->SetItemText(item, 2, W(row.vr));
-            tree_->SetItemText(item, 3, W(row.value));
-            tree_->SetItemText(item, 4, W(row.sequencePath));
-            rowItems_[i] = item;
+            rowItems_[i] = wxDataViewItem(node);
             continue;
         }
 
-        const wxTreeListItem item = tree_->AppendItem(parent, W(row.tag));
-        tree_->SetItemText(item, 1, W(row.name));
-        tree_->SetItemText(item, 2, W(row.vr));
-        tree_->SetItemText(item, 3, W(row.value));
-        tree_->SetItemText(item, 4, W(row.sequencePath));
-        rowItems_[i] = item;
+        HeaderTreeNode* node = model->Append(parent,
+            {W(row.tag), W(row.name), W(row.vr), W(row.value), W(row.sequencePath)});
+        rowItems_[i] = wxDataViewItem(node);
     }
 
-    // Keep the two main sections open while leaving sequences collapsed by default.
+    tree_->AssociateModel(model);
+    model->DecRef();
+
+    const wxDataViewItem datasetRoot(datasetRootNode);
+    const wxDataViewItem metaRoot(metaRootNode);
     tree_->Expand(datasetRoot);
     tree_->Expand(metaRoot);
     tree_->Thaw();
@@ -401,14 +534,12 @@ void HeaderFrame::RunSearch(bool advance) {
 
 void HeaderFrame::SelectRow(std::size_t row) {
     if (row >= rowItems_.size()) return;
-    const wxTreeListItem item = rowItems_[row];
-    if (!item.IsOk()) return;
+    const wxDataViewItem item = rowItems_[row];
+    if (!item.IsOk() || !tree_->GetModel()) return;
 
-    // Expand all sequence ancestors so a search hit is always visible.
-    const wxTreeListItem root = tree_->GetRootItem();
-    for (wxTreeListItem parent = tree_->GetItemParent(item);
-         parent.IsOk() && parent != root;
-         parent = tree_->GetItemParent(parent)) {
+    for (wxDataViewItem parent = tree_->GetModel()->GetParent(item);
+         parent.IsOk();
+         parent = tree_->GetModel()->GetParent(parent)) {
         tree_->Expand(parent);
     }
 
@@ -434,12 +565,98 @@ void HeaderFrame::UpdateSearchStatus() {
         : wxString::Format(L"Match %zu of %zu", searchPosition_ + 1, searchMatches_.size()));
 }
 
+wxString HeaderFrame::CopyLabelForColumn(int column) const {
+    switch (column) {
+        case 0: return L(L"Tag kopieren", L"Copy tag");
+        case 1: return L(L"Name kopieren", L"Copy name");
+        case 3: return L(L"Wert kopieren", L"Copy value");
+        case 4: return L(L"Sequence-Pfad kopieren", L"Copy sequence path");
+        default: return L(L"Kopieren", L"Copy");
+    }
+}
+
+bool HeaderFrame::CopyCell(const wxDataViewItem& item, int column) {
+    if (!item.IsOk() || !tree_->GetModel()) return false;
+    if (column < 0 || column >= 5 || column == 2) return false; // VR is intentionally not copyable.
+
+    wxVariant value;
+    tree_->GetModel()->GetValue(value, item, static_cast<unsigned int>(column));
+    const wxString text = value.GetString();
+    if (text.empty()) return false;
+
+    if (!wxTheClipboard->Open()) {
+        status_->SetLabel(L(L"Zwischenablage konnte nicht geöffnet werden.", L"Could not open the clipboard."));
+        return false;
+    }
+
+    wxTheClipboard->SetData(new wxTextDataObject(text));
+    wxTheClipboard->Flush();
+    wxTheClipboard->Close();
+
+    status_->SetLabel(L(L"Zelleninhalt wurde in die Zwischenablage kopiert.",
+                         L"Cell content copied to clipboard."));
+    return true;
+}
+
+bool HeaderFrame::CopyCurrentCell() {
+    const wxDataViewItem item = tree_->GetCurrentItem();
+    wxDataViewColumn* column = tree_->GetCurrentColumn();
+    if (!item.IsOk() || !column) return false;
+    const int columnIndex = tree_->GetColumnPosition(column);
+    return CopyCell(item, columnIndex);
+}
+
 void HeaderFrame::OnSearch(wxCommandEvent&) {
     RunSearch(true);
 }
 
 void HeaderFrame::OnFindNext(wxCommandEvent&) {
     RunSearch(true);
+}
+
+void HeaderFrame::OnContextMenu(wxDataViewEvent& event) {
+    wxDataViewItem item = event.GetItem();
+    int column = event.GetColumn();
+
+    if (!item.IsOk() || column < 0) {
+        wxDataViewColumn* hitColumn = nullptr;
+        tree_->HitTest(event.GetPosition(), item, hitColumn);
+        if (hitColumn) column = tree_->GetColumnPosition(hitColumn);
+    }
+
+    if (!item.IsOk() || column < 0 || column == 2) return;
+
+    wxVariant value;
+    if (!tree_->GetModel()) return;
+    tree_->GetModel()->GetValue(value, item, static_cast<unsigned int>(column));
+    if (value.GetString().empty()) return;
+
+    contextItem_ = item;
+    contextColumn_ = column;
+    tree_->Select(item);
+
+    wxMenu menu;
+    menu.Append(wxID_COPY, CopyLabelForColumn(column));
+    PopupMenu(&menu);
+}
+
+void HeaderFrame::OnCopyCell(wxCommandEvent&) {
+    if (contextItem_.IsOk() && contextColumn_ >= 0) {
+        CopyCell(contextItem_, contextColumn_);
+    } else {
+        CopyCurrentCell();
+    }
+}
+
+void HeaderFrame::OnCharHook(wxKeyEvent& event) {
+    const int key = event.GetKeyCode();
+    if (event.ControlDown() && (key == 'C' || key == 'c')) {
+        wxWindow* focus = wxWindow::FindFocus();
+        if (focus && focus != search_ && (focus == tree_ || tree_->IsDescendant(focus))) {
+            if (CopyCurrentCell()) return;
+        }
+    }
+    event.Skip();
 }
 
 void HeaderFrame::ApplyTheme() {
@@ -462,18 +679,11 @@ void HeaderFrame::ApplyTheme() {
     search_->SetForegroundColour(text);
     tree_->SetBackgroundColour(table);
     tree_->SetForegroundColour(text);
-    if (wxDataViewCtrl* dataView = tree_->GetDataView()) {
-        dataView->SetBackgroundColour(table);
-        dataView->SetForegroundColour(text);
-        dataView->Refresh();
-    }
+    tree_->Refresh();
 
 #ifdef _WIN32
     if (tree_->GetHandle()) {
         SetWindowTheme(reinterpret_cast<HWND>(tree_->GetHandle()), dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
-    }
-    if (wxDataViewCtrl* dataView = tree_->GetDataView(); dataView && dataView->GetHandle()) {
-        SetWindowTheme(reinterpret_cast<HWND>(dataView->GetHandle()), dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
     }
     ApplyNativeDarkMode(this, dark);
 #endif

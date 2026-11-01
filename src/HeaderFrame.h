@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <wx/dataview.h>
 #include <wx/frame.h>
-#include <wx/treelist.h>
 
 class DcmItem;
 class wxButton;
@@ -50,8 +50,15 @@ private:
     bool RowMatchesSearch(const HeaderRow& row, const wxString& query) const;
     void UpdateSearchStatus();
 
+    bool CopyCell(const wxDataViewItem& item, int column);
+    bool CopyCurrentCell();
+    wxString CopyLabelForColumn(int column) const;
+
     void OnSearch(wxCommandEvent& event);
     void OnFindNext(wxCommandEvent& event);
+    void OnContextMenu(wxDataViewEvent& event);
+    void OnCopyCell(wxCommandEvent& event);
+    void OnCharHook(wxKeyEvent& event);
 
     UiLanguage language_;
     UiTheme theme_;
@@ -71,11 +78,14 @@ private:
     wxTextCtrl* search_{};
     wxButton* findNext_{};
     wxStaticText* hint_{};
-    wxTreeListCtrl* tree_{};
+    wxDataViewCtrl* tree_{};
     wxStaticText* status_{};
 
+    wxDataViewItem contextItem_;
+    int contextColumn_{-1};
+
     std::vector<HeaderRow> rows_;
-    std::vector<wxTreeListItem> rowItems_;
+    std::vector<wxDataViewItem> rowItems_;
     std::vector<std::size_t> searchMatches_;
     std::size_t searchPosition_{};
     wxString lastQuery_;
