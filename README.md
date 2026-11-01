@@ -95,6 +95,8 @@ Each matching DICOM element is shown together with its instance and series conte
 - SOP Class UID
 - SOP Class name resolved from DCMTK's built-in DICOM UID registry
 
+The full **SOP Class UID** of a selected match can be copied directly to the clipboard by right-clicking the match and choosing **Copy SOP Class UID**, or by pressing `Ctrl+C` while the match list has focus.
+
 File sizes are displayed automatically in a human-readable unit (KB, MB, or GB depending on size). Selecting a series filters the match list to that series. **Show all** restores all matches for the currently selected patient and study.
 
 ## Per-instance DICOM header inspector

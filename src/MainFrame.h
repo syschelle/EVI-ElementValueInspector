@@ -68,9 +68,12 @@ private:
     void OnSeriesSelected(wxListEvent& event);
     void OnSeriesRightClick(wxListEvent& event);
     void OnSeriesKeyDown(wxKeyEvent& event);
+    void OnHitRightClick(wxListEvent& event);
+    void OnHitKeyDown(wxKeyEvent& event);
     void OnStudyUidContextMenu(wxContextMenuEvent& event);
     void OnCopyStudyUid(wxCommandEvent& event);
     void OnCopySeriesUid(wxCommandEvent& event);
+    void OnCopySopClassUid(wxCommandEvent& event);
     void OnHitActivated(wxListEvent& event);
     void OnProgress(wxThreadEvent& event);
     void OnComplete(wxThreadEvent& event);

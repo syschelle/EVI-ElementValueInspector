@@ -1,14 +1,13 @@
-# EVI v0.2.28
+# EVI v0.2.29
 
-This release improves column sizing in the match and instance view.
+This release adds direct clipboard access for SOP Class UIDs in the match and instance view.
 
 ## Changes
 
-- Match/instance columns now size themselves to the actual displayed content.
-- Every column also respects the width of its complete header label, so headers such as `Modalität` / `Modality` are never clipped just because the cell values are shorter.
-- Column widths are recalculated after scan results are populated and after the UI language changes.
-- Long paths and UIDs can still expand the table naturally; horizontal scrolling remains available when required.
-- Existing SOP Class information, DICOM Header Inspector, search modes and clipboard functions remain unchanged.
+- Right-click a match and choose **Copy SOP Class UID** to copy the full SOP Class UID.
+- `Ctrl+C` on the selected match copies the same full SOP Class UID.
+- Clipboard copy uses the underlying UID value and is independent of visible column width.
+- Existing Study Instance UID and Series Instance UID clipboard actions remain unchanged.
 
 ## Windows executable
 

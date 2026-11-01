@@ -55,7 +55,8 @@ enum {
     ID_PATIENT,
     ID_STUDY,
     ID_COPY_STUDY_UID,
-    ID_COPY_SERIES_UID
+    ID_COPY_SERIES_UID,
+    ID_COPY_SOP_CLASS_UID
 };
 
 struct Palette {
@@ -232,7 +233,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.28"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.29"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -459,7 +460,10 @@ void MainFrame::BindEvents() {
     studyUid_->Bind(wxEVT_CONTEXT_MENU, &MainFrame::OnStudyUidContextMenu, this);
     Bind(wxEVT_MENU, &MainFrame::OnCopyStudyUid, this, ID_COPY_STUDY_UID);
     Bind(wxEVT_MENU, &MainFrame::OnCopySeriesUid, this, ID_COPY_SERIES_UID);
+    Bind(wxEVT_MENU, &MainFrame::OnCopySopClassUid, this, ID_COPY_SOP_CLASS_UID);
     hitList_->Bind(wxEVT_LIST_ITEM_ACTIVATED, &MainFrame::OnHitActivated, this);
+    hitList_->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK, &MainFrame::OnHitRightClick, this);
+    hitList_->Bind(wxEVT_KEY_DOWN, &MainFrame::OnHitKeyDown, this);
     Bind(EVT_SCAN_PROGRESS, &MainFrame::OnProgress, this);
     Bind(EVT_SCAN_COMPLETE, &MainFrame::OnComplete, this);
     Bind(EVT_SCAN_ERROR, &MainFrame::OnScanError, this);
@@ -492,7 +496,7 @@ void MainFrame::AutoSizeHitColumns() {
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.28"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.29"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -571,8 +575,8 @@ void MainFrame::ApplyLanguage() {
     AutoSizeHitColumns();
 
     hitList_->SetToolTip(L(
-        L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
-        L"Double-click a match to open the complete DICOM header for that instance."));
+        L"Doppelklick öffnet den DICOM-Header. Rechtsklick oder Ctrl+C kopiert die SOP Class UID des ausgewählten Treffers.",
+        L"Double-click opens the DICOM header. Right-click or Ctrl+C copies the SOP Class UID of the selected match."));
 
     UpdateSearchModeUi();
 
@@ -1224,6 +1228,43 @@ void MainFrame::OnCopySeriesUid(wxCommandEvent&) {
     const auto it = result_->series.find(visibleSeriesKeys_[static_cast<std::size_t>(row)]);
     if (it == result_->series.end()) return;
     CopyTextToClipboard(W(it->second.seriesInstanceUid));
+}
+
+void MainFrame::OnHitRightClick(wxListEvent& event) {
+    const long row = event.GetIndex();
+    if (!result_ || row < 0 || static_cast<std::size_t>(row) >= visibleHitIndices_.size()) return;
+
+    const auto hitIndex = visibleHitIndices_[static_cast<std::size_t>(row)];
+    if (hitIndex >= result_->hits.size() || result_->hits[hitIndex].sopClassUid.empty()) return;
+
+    hitList_->SetItemState(row, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                           wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+
+    wxMenu menu;
+    menu.Append(ID_COPY_SOP_CLASS_UID, L(L"SOP Class UID kopieren", L"Copy SOP Class UID"));
+    hitList_->PopupMenu(&menu);
+}
+
+void MainFrame::OnHitKeyDown(wxKeyEvent& event) {
+    const int key = event.GetKeyCode();
+    if (event.ControlDown() && (key == 'C' || key == 'c')) {
+        wxCommandEvent copyEvent;
+        OnCopySopClassUid(copyEvent);
+        return;
+    }
+    event.Skip();
+}
+
+void MainFrame::OnCopySopClassUid(wxCommandEvent&) {
+    if (!result_) return;
+    const long row = hitList_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row < 0 || static_cast<std::size_t>(row) >= visibleHitIndices_.size()) return;
+
+    const auto hitIndex = visibleHitIndices_[static_cast<std::size_t>(row)];
+    if (hitIndex >= result_->hits.size()) return;
+    const auto& uid = result_->hits[hitIndex].sopClassUid;
+    if (uid.empty()) return;
+    CopyTextToClipboard(W(uid));
 }
 
 void MainFrame::OnHitActivated(wxListEvent& event) {

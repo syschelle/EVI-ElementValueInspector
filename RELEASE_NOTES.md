@@ -1,7 +1,7 @@
-# EVI v0.2.28 Release Notes
+# EVI v0.2.29 Release Notes
 
-## Content-aware match table columns
+## SOP Class UID clipboard support
 
-- Match and instance columns automatically fit their displayed cell contents.
-- Column headers define the minimum required width, preventing translated labels from being clipped.
-- Widths are refreshed after results are loaded and whenever the UI language changes.
+- Added **Copy SOP Class UID** to the match/instance context menu.
+- Added `Ctrl+C` support for copying the SOP Class UID of the selected match.
+- The complete UID is copied even when the visible table column is truncated.
