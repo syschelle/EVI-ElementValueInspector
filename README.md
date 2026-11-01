@@ -61,7 +61,7 @@ The compact study strip displays:
 - Study Instance UID
 - total DICOM size of the selected study
 
-Long values remain available through tooltips without consuming unnecessary screen space.
+Long values remain available through tooltips without consuming unnecessary screen space. The Study Instance UID can be copied directly from its context menu.
 
 The series overview includes:
 
@@ -75,7 +75,7 @@ The series overview includes:
 - total DICOM size of the series
 - Series Instance UID
 
-All detected series of the selected patient and study are shown, including series that do not contain a match for the current search.
+All detected series of the selected patient and study are shown, including series that do not contain a match for the current search. Right-clicking a series provides a direct **Copy Series Instance UID** action, and `Ctrl+C` copies the UID of the currently selected series.
 
 ## Match details
 

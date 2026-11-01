@@ -7,11 +7,15 @@
 
 #include <wx/button.h>
 #include <wx/choice.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
 #include <wx/dirdlg.h>
+#include <wx/event.h>
 #include <wx/filedlg.h>
 #include <wx/font.h>
 #include <wx/gauge.h>
 #include <wx/listctrl.h>
+#include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/panel.h>
 #include <wx/settings.h>
@@ -49,7 +53,9 @@ enum {
     ID_LANGUAGE,
     ID_THEME,
     ID_PATIENT,
-    ID_STUDY
+    ID_STUDY,
+    ID_COPY_STUDY_UID,
+    ID_COPY_SERIES_UID
 };
 
 struct Palette {
@@ -201,6 +207,14 @@ wxString MainFrame::L(const wchar_t* de, const wchar_t* en) const {
     return wxString(language_ == UiLanguage::German ? de : en);
 }
 
+bool MainFrame::CopyTextToClipboard(const wxString& text) {
+    if (text.empty() || text == L"-") return false;
+    if (!wxTheClipboard || !wxTheClipboard->Open()) return false;
+    wxTheClipboard->SetData(new wxTextDataObject(text));
+    wxTheClipboard->Close();
+    return true;
+}
+
 void MainFrame::BuildUi() {
     rootPanel_ = new wxPanel(this);
     auto* root = new wxBoxSizer(wxVERTICAL);
@@ -218,7 +232,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.25"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.26"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -438,6 +452,11 @@ void MainFrame::BindEvents() {
     tag_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     folder_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnStart, this);
     seriesList_->Bind(wxEVT_LIST_ITEM_SELECTED, &MainFrame::OnSeriesSelected, this);
+    seriesList_->Bind(wxEVT_LIST_ITEM_RIGHT_CLICK, &MainFrame::OnSeriesRightClick, this);
+    seriesList_->Bind(wxEVT_KEY_DOWN, &MainFrame::OnSeriesKeyDown, this);
+    studyUid_->Bind(wxEVT_CONTEXT_MENU, &MainFrame::OnStudyUidContextMenu, this);
+    Bind(wxEVT_MENU, &MainFrame::OnCopyStudyUid, this, ID_COPY_STUDY_UID);
+    Bind(wxEVT_MENU, &MainFrame::OnCopySeriesUid, this, ID_COPY_SERIES_UID);
     hitList_->Bind(wxEVT_LIST_ITEM_ACTIVATED, &MainFrame::OnHitActivated, this);
     Bind(EVT_SCAN_PROGRESS, &MainFrame::OnProgress, this);
     Bind(EVT_SCAN_COMPLETE, &MainFrame::OnComplete, this);
@@ -453,7 +472,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.25"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.26"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -512,6 +531,9 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(seriesList_, 6, L(L"Treffer", L"Matches"));
     SetColumnTitle(seriesList_, 7, L(L"Größe", L"Size"));
     SetColumnTitle(seriesList_, 8, wxString(L"Series Instance UID"));
+    seriesList_->SetToolTip(L(
+        L"Rechtsklick auf eine Serie zum Kopieren der Series Instance UID. Bei ausgewählter Serie kopiert Ctrl+C ebenfalls die UID.",
+        L"Right-click a series to copy its Series Instance UID. With a series selected, Ctrl+C also copies the UID."));
 
     SetColumnTitle(hitList_, 0, L(L"Serie", L"Series"));
     SetColumnTitle(hitList_, 1, L(L"Instanz", L"Instance"));
@@ -989,6 +1011,11 @@ void MainFrame::UpdateStudyLabels() {
     studySize_->SetLabel(size);
     studySize_->SetToolTip(size + wxString::Format(L" (%llu bytes)", static_cast<unsigned long long>(study.sizeBytes)));
     SetStudyValue(studyUid_, study.studyInstanceUid);
+    if (!study.studyInstanceUid.empty()) {
+        studyUid_->SetToolTip(W(study.studyInstanceUid) + L(
+            L"\nRechtsklick: Study Instance UID kopieren",
+            L"\nRight-click: copy Study Instance UID"));
+    }
     studyCard_->Layout();
 }
 
@@ -1120,6 +1147,55 @@ void MainFrame::OnSeriesSelected(wxListEvent& event) {
     if (row >= 0 && static_cast<std::size_t>(row) < visibleSeriesKeys_.size()) {
         PopulateHits(visibleSeriesKeys_[static_cast<std::size_t>(row)]);
     }
+}
+
+void MainFrame::OnSeriesRightClick(wxListEvent& event) {
+    const long row = event.GetIndex();
+    if (!result_ || row < 0 || static_cast<std::size_t>(row) >= visibleSeriesKeys_.size()) return;
+
+    seriesList_->SetItemState(row, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
+                              wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+
+    wxMenu menu;
+    menu.Append(ID_COPY_SERIES_UID, L(L"Series Instance UID kopieren", L"Copy Series Instance UID"));
+    seriesList_->PopupMenu(&menu);
+}
+
+void MainFrame::OnSeriesKeyDown(wxKeyEvent& event) {
+    const int key = event.GetKeyCode();
+    if (event.ControlDown() && (key == 'C' || key == 'c')) {
+        wxCommandEvent copyEvent;
+        OnCopySeriesUid(copyEvent);
+        return;
+    }
+    event.Skip();
+}
+
+void MainFrame::OnStudyUidContextMenu(wxContextMenuEvent&) {
+    if (!result_ || selectedStudyKey_.empty()) return;
+    const auto it = result_->studies.find(selectedStudyKey_);
+    if (it == result_->studies.end() || it->second.studyInstanceUid.empty()) return;
+
+    wxMenu menu;
+    menu.Append(ID_COPY_STUDY_UID, L(L"Study Instance UID kopieren", L"Copy Study Instance UID"));
+    studyUid_->PopupMenu(&menu);
+}
+
+void MainFrame::OnCopyStudyUid(wxCommandEvent&) {
+    if (!result_ || selectedStudyKey_.empty()) return;
+    const auto it = result_->studies.find(selectedStudyKey_);
+    if (it == result_->studies.end()) return;
+    CopyTextToClipboard(W(it->second.studyInstanceUid));
+}
+
+void MainFrame::OnCopySeriesUid(wxCommandEvent&) {
+    if (!result_) return;
+    const long row = seriesList_->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (row < 0 || static_cast<std::size_t>(row) >= visibleSeriesKeys_.size()) return;
+
+    const auto it = result_->series.find(visibleSeriesKeys_[static_cast<std::size_t>(row)]);
+    if (it == result_->series.end()) return;
+    CopyTextToClipboard(W(it->second.seriesInstanceUid));
 }
 
 void MainFrame::OnHitActivated(wxListEvent& event) {

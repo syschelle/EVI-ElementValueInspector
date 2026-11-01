@@ -1,16 +1,13 @@
-# EVI v0.2.25
+# EVI v0.2.26
 
-This release improves the per-instance DICOM Header Inspector for multi-line metadata and fast value extraction.
+This release adds direct clipboard access for study and series identifiers in the main result view.
 
 ## Changes
 
-- Header rows now grow automatically when a DICOM value contains multiple lines.
-- Multi-line values are shown completely instead of being clipped by a fixed row height.
-- Added cell-aware clipboard copy in the DICOM Header Inspector.
-- Right-clicking a Tag, Name, Value or Sequence Path cell offers a matching copy command.
-- `Ctrl+C` copies the currently focused header cell.
-- VR cells intentionally do not provide a copy action.
-- Sequence grouping, alternating row backgrounds, local header search and automatic navigation to the original study-search hit remain unchanged.
+- Added **Copy Study Instance UID** to the Study UID context menu.
+- Added **Copy Series Instance UID** to the series context menu.
+- `Ctrl+C` copies the Series Instance UID of the currently selected series.
+- Existing patient/study filtering, search modes, DICOM Header Inspector and CSV export remain unchanged.
 
 ## Windows executable
 

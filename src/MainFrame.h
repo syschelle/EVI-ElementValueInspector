@@ -13,8 +13,10 @@
 #include <wx/listctrl.h>
 
 class wxButton;
+class wxContextMenuEvent;
 class wxChoice;
 class wxGauge;
+class wxKeyEvent;
 class wxPanel;
 class wxSplitterWindow;
 class wxStaticText;
@@ -49,6 +51,7 @@ private:
     wxString L(const wchar_t* de, const wchar_t* en) const;
     void SetColumnTitle(wxListCtrl* list, int column, const wxString& title);
     void SetStudyValue(wxStaticText* label, const std::string& value);
+    bool CopyTextToClipboard(const wxString& text);
 
     void OnChooseFolder(wxCommandEvent& event);
     void OnChooseTag(wxCommandEvent& event);
@@ -62,6 +65,11 @@ private:
     void OnPatientChanged(wxCommandEvent& event);
     void OnStudyChanged(wxCommandEvent& event);
     void OnSeriesSelected(wxListEvent& event);
+    void OnSeriesRightClick(wxListEvent& event);
+    void OnSeriesKeyDown(wxKeyEvent& event);
+    void OnStudyUidContextMenu(wxContextMenuEvent& event);
+    void OnCopyStudyUid(wxCommandEvent& event);
+    void OnCopySeriesUid(wxCommandEvent& event);
     void OnHitActivated(wxListEvent& event);
     void OnProgress(wxThreadEvent& event);
     void OnComplete(wxThreadEvent& event);
