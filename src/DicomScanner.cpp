@@ -186,6 +186,8 @@ void CollectMatches(
         hit.relativeFile = DicomUtils::ToUtf8Path(ec ? file.filename() : relative);
         hit.fullFile = DicomUtils::ToUtf8Path(file);
         hit.sopInstanceUid = DicomUtils::GetString(ds, DCM_SOPInstanceUID);
+        hit.sopClassUid = DicomUtils::GetString(ds, DCM_SOPClassUID);
+        hit.sopClassName = DicomUtils::SopClassName(hit.sopClassUid);
         hit.instanceSizeBytes = fileSize;
         hits.push_back(std::move(hit));
     }
@@ -233,6 +235,8 @@ void CollectValueMatches(
         hit.relativeFile = DicomUtils::ToUtf8Path(ec ? file.filename() : relative);
         hit.fullFile = DicomUtils::ToUtf8Path(file);
         hit.sopInstanceUid = DicomUtils::GetString(ds, DCM_SOPInstanceUID);
+        hit.sopClassUid = DicomUtils::GetString(ds, DCM_SOPClassUID);
+        hit.sopClassName = DicomUtils::SopClassName(hit.sopClassUid);
         hit.instanceSizeBytes = fileSize;
         hits.push_back(std::move(hit));
     }

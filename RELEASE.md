@@ -1,13 +1,15 @@
-# EVI v0.2.26
+# EVI v0.2.27
 
-This release adds direct clipboard access for study and series identifiers in the main result view.
+This release adds SOP Class identification to the main match and instance view.
 
 ## Changes
 
-- Added **Copy Study Instance UID** to the Study UID context menu.
-- Added **Copy Series Instance UID** to the series context menu.
-- `Ctrl+C` copies the Series Instance UID of the currently selected series.
-- Existing patient/study filtering, search modes, DICOM Header Inspector and CSV export remain unchanged.
+- Added **SOP Class UID** for each matching DICOM instance.
+- Added a readable **SOP Class** column resolved through DCMTK's built-in DICOM UID registry.
+- Known standard classes can therefore be shown by name, for example `CT Image Storage`, while the original UID remains visible.
+- Unknown or private SOP Class UIDs remain visible and are marked as unknown/private in the UI.
+- Added SOP Class UID and resolved name to CSV exports.
+- Existing tag/value search, patient/study filtering, DICOM Header Inspector and clipboard functions remain unchanged.
 
 ## Windows executable
 

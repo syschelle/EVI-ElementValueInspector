@@ -1,7 +1,8 @@
-# EVI v0.2.26 Release Notes
+# EVI v0.2.27 Release Notes
 
-## Clipboard improvements
+## SOP Class information
 
-- Study Instance UID is now directly copyable from the compact study information strip.
-- Series Instance UID is now directly copyable from the series list.
-- `Ctrl+C` copies the UID for the selected series.
+- The match/instance table now includes the SOP Class UID for every DICOM instance.
+- EVI resolves known SOP Class UIDs to readable names using DCMTK's built-in UID registry.
+- Unknown/private SOP Class UIDs remain visible and are clearly identified.
+- CSV export now includes `SOPClassUID` and `SOPClassName`.

@@ -232,7 +232,7 @@ void MainFrame::BuildUi() {
     title_->SetFont(titleFont);
     titleRow->Add(title_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.26"));
+    version_ = new wxStaticText(headerPanel_, wxID_ANY, wxString(L"EVI 0.2.27"));
     wxFont versionFont = version_->GetFont();
     versionFont.SetPointSize(std::max(8, versionFont.GetPointSize() - 1));
     versionFont.MakeBold();
@@ -397,6 +397,8 @@ void MainFrame::BuildUi() {
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 300);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 250);
     hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 350);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 240);
+    hitList_->AppendColumn(wxEmptyString, wxLIST_FORMAT_LEFT, 430);
     hitSizer->Add(hitList_, 1, wxEXPAND | wxLEFT | wxRIGHT, 10);
 
     auto* hitButtons = new wxBoxSizer(wxHORIZONTAL);
@@ -472,7 +474,7 @@ void MainFrame::SetColumnTitle(wxListCtrl* list, int column, const wxString& tit
 }
 
 void MainFrame::ApplyLanguage() {
-    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.26"));
+    SetTitle(wxString(L"ElementValueInspector (EVI) 0.2.27"));
 
     subtitle_->SetLabel(L(
         L"DICOM-Studien durchsuchen, Tags finden und Elementwerte übersichtlich anzeigen.",
@@ -546,6 +548,8 @@ void MainFrame::ApplyLanguage() {
     SetColumnTitle(hitList_, 8, L(L"Sequence-Pfad", L"Sequence path"));
     SetColumnTitle(hitList_, 9, L(L"Datei", L"File"));
     SetColumnTitle(hitList_, 10, wxString(L"SOP Instance UID"));
+    SetColumnTitle(hitList_, 11, L(L"SOP-Klasse", L"SOP Class"));
+    SetColumnTitle(hitList_, 12, wxString(L"SOP Class UID"));
 
     hitList_->SetToolTip(L(
         L"Doppelklick auf einen Treffer öffnet den vollständigen DICOM-Header dieser Instanz.",
@@ -1120,6 +1124,10 @@ void MainFrame::PopulateHits(const std::string& seriesKey) {
         hitList_->SetItem(row, 8, W(h.sequencePath));
         hitList_->SetItem(row, 9, W(h.relativeFile));
         hitList_->SetItem(row, 10, W(h.sopInstanceUid));
+        hitList_->SetItem(row, 11, W(h.sopClassName.empty()
+            ? (language_ == UiLanguage::German ? "Unbekannte/private SOP-Klasse" : "Unknown/private SOP Class")
+            : h.sopClassName));
+        hitList_->SetItem(row, 12, W(h.sopClassUid));
         visibleHitIndices_.push_back(hitIndex);
     }
     ApplyListRowTheme(hitList_);
@@ -1242,7 +1250,7 @@ void MainFrame::ExportCsv() {
 
     out.write("\xEF\xBB\xBF", 3);
     out << "PatientName;PatientID;AccessionNumber;StudyDate;StudyDescription;StudyInstanceUID;StudySizeBytes;"
-           "SeriesNumber;Modality;SeriesInstanceUID;SeriesSizeBytes;InstanceNumber;SOPInstanceUID;InstanceSizeBytes;Tag;TagName;VR;Value;SequencePath;RelativeFile;FullFile\r\n";
+           "SeriesNumber;Modality;SeriesInstanceUID;SeriesSizeBytes;InstanceNumber;SOPInstanceUID;SOPClassUID;SOPClassName;InstanceSizeBytes;Tag;TagName;VR;Value;SequencePath;RelativeFile;FullFile\r\n";
 
     for (const auto& h : result_->hits) {
         const auto patientIt = result_->patients.find(h.patientKey);
@@ -1264,6 +1272,8 @@ void MainFrame::ExportCsv() {
             << (seriesIt == result_->series.end() ? 0 : seriesIt->second.sizeBytes) << ';'
             << CsvEscape(h.instanceNumber) << ';'
             << CsvEscape(h.sopInstanceUid) << ';'
+            << CsvEscape(h.sopClassUid) << ';'
+            << CsvEscape(h.sopClassName) << ';'
             << h.instanceSizeBytes << ';'
             << CsvEscape(h.tag) << ';'
             << CsvEscape(h.tagName) << ';'

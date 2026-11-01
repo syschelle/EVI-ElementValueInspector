@@ -4,6 +4,7 @@
 #include <dcmtk/dcmdata/dcdicent.h>
 #include <dcmtk/dcmdata/dcdeftag.h>
 #include <dcmtk/dcmdata/dcsequen.h>
+#include <dcmtk/dcmdata/dcuid.h>
 #include <dcmtk/dcmdata/dcvr.h>
 
 #include <algorithm>
@@ -113,6 +114,12 @@ std::string GetString(DcmItem* item, const DcmTagKey& key) {
         return value.c_str();
     }
     return {};
+}
+
+std::string SopClassName(const std::string& uid) {
+    if (uid.empty()) return {};
+    const char* name = dcmFindNameOfUID(uid.c_str(), nullptr);
+    return name ? std::string(name) : std::string{};
 }
 
 std::string SafeElementValue(DcmObject* object, UiLanguage language) {

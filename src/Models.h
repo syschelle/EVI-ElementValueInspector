@@ -67,6 +67,8 @@ struct ScanHit {
     std::string relativeFile;
     std::string fullFile;
     std::string sopInstanceUid;
+    std::string sopClassUid;
+    std::string sopClassName;
     std::uintmax_t instanceSizeBytes{};
 };
 

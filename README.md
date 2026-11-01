@@ -92,6 +92,8 @@ Each matching DICOM element is shown together with its instance and series conte
 - relative source file
 - instance file size
 - SOP Instance UID
+- SOP Class UID
+- SOP Class name resolved from DCMTK's built-in DICOM UID registry
 
 File sizes are displayed automatically in a human-readable unit (KB, MB, or GB depending on size). Selecting a series filters the match list to that series. **Show all** restores all matches for the currently selected patient and study.
 
@@ -149,7 +151,7 @@ The interface uses Unicode throughout and explicitly enables UTF-8 at the Window
 
 ## CSV export
 
-Main-search results can be exported as a UTF-8 CSV file. The export contains patient, study, series, instance, tag, value, sequence-path, source-file, and exact byte-size information for studies, series, and instances.
+Main-search results can be exported as a UTF-8 CSV file. The export contains patient, study, series, instance, SOP Class UID and resolved SOP Class name, tag, value, sequence-path, source-file, and exact byte-size information for studies, series, and instances.
 
 Because exported files can contain patient information, exported CSV files should be handled according to the same privacy and security requirements as the source DICOM data.
 
@@ -176,7 +178,7 @@ Network access is only relevant during source builds when CMake downloads the de
 
 EVI is implemented as a native C++20 Windows application using:
 
-- DCMTK 3.7.0 for DICOM parsing and the embedded DICOM dictionary
+- DCMTK 3.7.0 for DICOM parsing, the embedded DICOM data dictionary, and UID-to-name resolution for known SOP Classes
 - wxWidgets 3.2.12 for the native Windows user interface
 - CMake for project configuration and builds
 - Microsoft Visual C++ for Windows x64 builds
